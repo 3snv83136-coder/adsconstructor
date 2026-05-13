@@ -4,8 +4,10 @@
  * Point d'entrée de l'application. Initialise :
  *   - La base de données
  *   - Les services (Google Ads, Fraude, ROI, Calendrier)
- *   - Le serveur HTTP + WebSocket
+ *   - Le serveur HTTP + WebSocket (local uniquement)
  *   - Les routes API REST
+ *
+ * Compatible Vercel serverless : détection automatique via VERCEL env.
  */
 const express = require('express');
 const http = require('http');
@@ -32,7 +34,7 @@ const roiRouter = require('./routes/roi');
 const calendarRouter = require('./routes/calendar');
 
 // ============================================================
-//  Initialisation de l'application
+//  Création de l'app Express
 // ============================================================
 const app = express();
 const server = http.createServer(app);
@@ -69,7 +71,6 @@ app.get('/api/health', (req, res) => {
 // --- Dashboard statique ---
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Fallback vers le dashboard
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
@@ -81,72 +82,77 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================================
-//  Démarrage
+//  Initialisation asynchrone (top-level await supporté par Vercel / Node 14+)
 // ============================================================
-async function start() {
-  console.log('═══════════════════════════════════════════════');
-  console.log('  AdWords Automator v1.0.0');
-  console.log('  Gestion automatisée de campagnes Google Ads');
-  console.log('═══════════════════════════════════════════════');
-  console.log('');
+async function initialize() {
+  const isVercel = !!process.env.VERCEL;
+
+  if (!isVercel) {
+    console.log('═══════════════════════════════════════════════');
+    console.log('  AdWords Automator v1.0.0');
+    console.log('  Gestion automatisée de campagnes Google Ads');
+    console.log('═══════════════════════════════════════════════');
+    console.log('');
+  }
 
   // 1. Base de données
   await initDatabase();
-  console.log('');
 
   // 2. Service Google Ads
   await adsApi.initialize();
-  console.log('');
 
-  // 3. WebSocket temps réel
-  realtimeMonitor.initialize(server);
-  realtimeMonitor.startBroadcast();
-  console.log('');
+  // 3. WebSocket temps réel (désactivé sur Vercel — pas de WS persistant)
+  if (!isVercel) {
+    realtimeMonitor.initialize(server);
+    realtimeMonitor.startBroadcast();
+  }
 
   // 4. Bloqueur de clics abusifs
   fraudDetector.start();
-  console.log('');
 
   // 5. Optimiseur ROI
   roiOptimizer.start();
-  console.log('');
 
   // 6. Calendrier de diffusion
   calendarScheduler.start();
-  console.log('');
 
-  // 7. Serveur HTTP
-  server.listen(config.server.port, () => {
-    console.log('');
-    console.log('═══════════════════════════════════════════════');
-    console.log(`  🚀 Serveur démarré sur http://localhost:${config.server.port}`);
-    console.log(`  📊 Dashboard: http://localhost:${config.server.port}`);
-    console.log(`  📡 API:        http://localhost:${config.server.port}/api`);
-    console.log(`  🔌 WebSocket:  ws://localhost:${config.server.port}`);
-    console.log('═══════════════════════════════════════════════');
-  });
+  // 7. Démarrage du serveur HTTP (local uniquement)
+  if (!isVercel) {
+    const port = config.server.port;
+    server.listen(port, () => {
+      console.log('');
+      console.log('═══════════════════════════════════════════════');
+      console.log(`  🚀 Serveur démarré sur http://localhost:${port}`);
+      console.log(`  📊 Dashboard: http://localhost:${port}`);
+      console.log(`  📡 API:        http://localhost:${port}/api`);
+      console.log(`  🔌 WebSocket:  ws://localhost:${port}`);
+      console.log('═══════════════════════════════════════════════');
+    });
+  }
 }
 
-// Gestion de l'arrêt propre
-function shutdown() {
-  console.log('\n🛑 Arrêt du serveur...');
-  fraudDetector.stop();
-  roiOptimizer.stop();
-  calendarScheduler.stop();
-  realtimeMonitor.stop();
-  server.close(() => {
-    console.log('✅ Serveur arrêté');
-    process.exit(0);
-  });
-}
-
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
-
-// Démarrage
-start().catch(err => {
+// Initialisation
+const initPromise = initialize().catch(err => {
   console.error('Erreur fatale au démarrage:', err);
-  process.exit(1);
+  if (!process.env.VERCEL) process.exit(1);
 });
+
+// Gestion de l'arrêt propre (local uniquement)
+if (!process.env.VERCEL) {
+  function shutdown() {
+    console.log('\n🛑 Arrêt du serveur...');
+    fraudDetector.stop();
+    roiOptimizer.stop();
+    calendarScheduler.stop();
+    realtimeMonitor.stop();
+    server.close(() => {
+      console.log('✅ Serveur arrêté');
+      process.exit(0);
+    });
+  }
+
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+}
 
 module.exports = app;
