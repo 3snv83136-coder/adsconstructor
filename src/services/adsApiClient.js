@@ -18,6 +18,14 @@ class AdsApiClient {
    * Initialise le client et récupère un token OAuth2
    */
   async initialize() {
+    // Si pas de credentials, passer directement en mode simulation
+    if (!config.googleAds.clientId || !config.googleAds.clientSecret || !config.googleAds.refreshToken) {
+      this.initialized = true;
+      this.simulated = true;
+      console.log('🔄 Mode simulation activé (pas de credentials Google Ads)');
+      return true;
+    }
+
     try {
       const response = await this._fetchToken();
       this.accessToken = response.access_token;
@@ -27,10 +35,9 @@ class AdsApiClient {
       return true;
     } catch (err) {
       console.error('❌ Échec connexion Google Ads API:', err.message);
-      // Mode simulation si pas de credentials
       this.initialized = true;
       this.simulated = true;
-      console.log('🔄 Mode simulation activé (pas de credentials Google Ads)');
+      console.log('🔄 Mode simulation activé (fallback après échec)');
       return true;
     }
   }
