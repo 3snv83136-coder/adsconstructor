@@ -10,7 +10,7 @@ const config = {
     env: process.env.NODE_ENV || 'development',
   },
   database: {
-    path: process.env.DB_PATH || './data/adwords.db',
+    path: process.env.DB_PATH || (process.env.VERCEL ? '/tmp/data/adwords.db' : './data/adwords.db'),
   },
   googleAds: {
     clientId: process.env.GOOGLE_ADS_CLIENT_ID,
