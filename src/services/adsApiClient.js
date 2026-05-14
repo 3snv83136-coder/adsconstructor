@@ -92,6 +92,7 @@ class AdsApiClient {
       return this._simulateMetrics(campaignId);
     }
 
+
     await this._ensureToken();
     const cacheKey = `metrics_${campaignId}`;
     const cached = this.cache.get(cacheKey);
@@ -134,7 +135,7 @@ class AdsApiClient {
    */
   async updateCampaignBid(campaignId, newMaxCpc) {
     if (this.simulated) {
-      db.prepare('UPDATE campaigns SET max_cpc = ?, updated_at = datetime("now") WHERE id = ?')
+      await db.prepare("UPDATE campaigns SET max_cpc = ?, updated_at = now() WHERE id = ?")
         .run(newMaxCpc, campaignId);
       return { success: true, newMaxCpc };
     }
@@ -161,7 +162,7 @@ class AdsApiClient {
    */
   async setCampaignStatus(campaignId, status) {
     if (this.simulated) {
-      db.prepare('UPDATE campaigns SET status = ?, updated_at = datetime("now") WHERE id = ?')
+      await db.prepare("UPDATE campaigns SET status = ?, updated_at = now() WHERE id = ?")
         .run(status, campaignId);
       return { success: true, status };
     }
@@ -172,8 +173,8 @@ class AdsApiClient {
   /**
    * Simulation de métriques pour le développement
    */
-  _simulateMetrics(campaignId) {
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+  async _simulateMetrics(campaignId) {
+    const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
     if (!campaign) return null;
 
     const hourOfDay = new Date().getHours();

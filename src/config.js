@@ -10,7 +10,8 @@ const config = {
     env: process.env.NODE_ENV || 'development',
   },
   database: {
-    path: process.env.DB_PATH || (process.env.VERCEL ? '/tmp/data/adwords.db' : './data/adwords.db'),
+    url: process.env.DATABASE_URL,
+    poolMax: parseInt(process.env.DB_POOL_MAX, 10) || (process.env.VERCEL ? 1 : 10),
   },
   googleAds: {
     clientId: process.env.GOOGLE_ADS_CLIENT_ID,

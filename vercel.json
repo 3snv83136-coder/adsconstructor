@@ -5,5 +5,8 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "src/server.js" },
     { "source": "/(.*)", "destination": "src/server.js" }
+  ],
+  "crons": [
+    { "path": "/api/cron/all", "schedule": "* * * * *" }
   ]
 }

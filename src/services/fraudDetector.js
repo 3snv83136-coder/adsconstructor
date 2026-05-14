@@ -10,6 +10,10 @@
  *
  * Score de fraude : 0 (légitime) → 100 (fraude certaine)
  * Seuil de blocage automatique : score ≥ 70
+ *
+ * Note serverless : le cache mémoire (`ipStats`, `blockedCache`) n'est pas
+ * partagé entre instances ni persistant. La liste noire est donc également
+ * vérifiée en base à chaque analyse.
  */
 const config = require('../config');
 const { db } = require('../database');
@@ -28,12 +32,12 @@ class FraudDetector {
   }
 
   /**
-   * Démarre le détecteur de fraude
+   * Démarre le détecteur de fraude (usage local — sur Vercel, voir /api/cron)
    */
-  start() {
+  async start() {
     // Charge les IPs bloquées depuis la DB
-    const blockedIps = db.prepare(
-      "SELECT ip_address FROM blocked_ips WHERE is_active = 1 AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))"
+    const blockedIps = await db.prepare(
+      "SELECT ip_address FROM blocked_ips WHERE is_active = 1 AND (expires_at IS NULL OR expires_at > now())"
     ).all();
     blockedIps.forEach(row => this.blockedCache.add(row.ip_address));
 
@@ -41,6 +45,23 @@ class FraudDetector {
     this.cleanupInterval = setInterval(() => this._cleanup(), 5 * 60 * 1000);
 
     console.log(`🛡️  Bloqueur de clics abusifs actif - ${blockedIps.length} IPs bloquées en cache`);
+  }
+
+  /**
+   * Vérifie si une IP est actuellement bloquée (cache mémoire + base)
+   */
+  async _isBlocked(ip) {
+    if (this.blockedCache.has(ip)) return true;
+
+    const row = await db.prepare(
+      "SELECT 1 AS blocked FROM blocked_ips WHERE ip_address = ? AND is_active = 1 AND (expires_at IS NULL OR expires_at > now()) LIMIT 1"
+    ).get(ip);
+
+    if (row) {
+      this.blockedCache.add(ip);
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -53,9 +74,9 @@ class FraudDetector {
    * @param {number} clickData.campaign_id - ID de la campagne
    * @param {number} clickData.ad_group_id - ID du groupe d'annonces
    * @param {string} clickData.country - Code pays
-   * @returns {Object} { isFraudulent, score, reasons, action }
+   * @returns {Promise<Object>} { isFraudulent, score, reasons, action }
    */
-  analyzeClick(clickData) {
+  async analyzeClick(clickData) {
     this.metrics.totalClicksAnalyzed++;
     const reasons = [];
     let score = 0;
@@ -63,8 +84,8 @@ class FraudDetector {
     const ip = clickData.ip_address;
     const now = Date.now();
 
-    // --- Vérification 1 : IP déjà bloquée ---
-    if (this.blockedCache.has(ip)) {
+    // --- Vérification 1 : IP déjà bloquée (cache + base) ---
+    if (await this._isBlocked(ip)) {
       return this._verdict(true, 100, ['IP bloquée (liste noire)'], 'block');
     }
 
@@ -102,7 +123,7 @@ class FraudDetector {
     }
 
     // --- Vérification 7 : Clics multiples sur même campagne depuis même IP ---
-    const campaignScore = this._checkCampaignAbuse(ip, clickData.campaign_id, now);
+    const campaignScore = await this._checkCampaignAbuse(ip, clickData.campaign_id, now);
     score += campaignScore;
     if (campaignScore > 15) reasons.push('Abus campagne (multi-clics même IP)');
 
@@ -116,12 +137,12 @@ class FraudDetector {
     if (isFraudulent) {
       this.metrics.fraudulentClicks++;
       if (action === 'block') {
-        this._blockIp(ip, reasons.join('; '));
+        await this._blockIp(ip, reasons.join('; '));
       }
     }
 
     // Enregistre le clic dans la base
-    this._logClick(clickData, isFraudulent, score, reasons);
+    await this._logClick(clickData, isFraudulent, score, reasons);
 
     return this._verdict(isFraudulent, score, reasons, action);
   }
@@ -236,16 +257,18 @@ class FraudDetector {
   /**
    * Vérifie les clics abusifs sur une même campagne
    */
-  _checkCampaignAbuse(ip, campaignId, now) {
+  async _checkCampaignAbuse(ip, campaignId, now) {
+    if (campaignId === undefined || campaignId === null) return 0;
+
     const oneMinuteAgo = new Date(now - 60000).toISOString();
 
-    const count = db.prepare(
+    const count = await db.prepare(
       `SELECT COUNT(*) as cnt FROM click_events
-       WHERE ip_address = ? AND campaign_id = ? AND created_at > ?`
+       WHERE ip_address = ? AND campaign_id = ? AND created_at > ?::timestamptz`
     ).get(ip, campaignId, oneMinuteAgo);
 
-    if (count && count.cnt > 3) {
-      return Math.min(20, (count.cnt - 3) * 5);
+    if (count && Number(count.cnt) > 3) {
+      return Math.min(20, (Number(count.cnt) - 3) * 5);
     }
 
     return 0;
@@ -266,7 +289,7 @@ class FraudDetector {
   /**
    * Bloque une IP automatiquement
    */
-  _blockIp(ip, reason) {
+  async _blockIp(ip, reason) {
     if (this.blockedCache.has(ip)) return;
 
     this.blockedCache.add(ip);
@@ -274,13 +297,18 @@ class FraudDetector {
 
     const expiresAt = new Date(Date.now() + config.fraud.blockDurationMinutes * 60000).toISOString();
 
-    db.prepare(
-      `INSERT OR REPLACE INTO blocked_ips (ip_address, reason, blocked_at, expires_at, is_active)
-       VALUES (?, ?, datetime('now'), ?, 1)`
+    await db.prepare(
+      `INSERT INTO blocked_ips (ip_address, reason, blocked_at, expires_at, is_active)
+       VALUES (?, ?, now(), ?::timestamptz, 1)
+       ON CONFLICT (ip_address) DO UPDATE SET
+         reason = EXCLUDED.reason,
+         blocked_at = now(),
+         expires_at = EXCLUDED.expires_at,
+         is_active = 1`
     ).run(ip, reason, expiresAt);
 
     // Log d'audit
-    db.prepare(
+    await db.prepare(
       `INSERT INTO audit_logs (event_type, severity, message, details)
        VALUES ('ip_blocked', 'warning', ?, ?)`
     ).run(`IP bloquée: ${ip}`, JSON.stringify({ reason, expiresAt }));
@@ -291,12 +319,12 @@ class FraudDetector {
   /**
    * Débloque une IP manuellement
    */
-  unblockIp(ip) {
+  async unblockIp(ip) {
     this.blockedCache.delete(ip);
 
-    db.prepare('UPDATE blocked_ips SET is_active = 0 WHERE ip_address = ?').run(ip);
+    await db.prepare('UPDATE blocked_ips SET is_active = 0 WHERE ip_address = ?').run(ip);
 
-    db.prepare(
+    await db.prepare(
       `INSERT INTO audit_logs (event_type, severity, message)
        VALUES ('ip_unblocked', 'info', ?)`
     ).run(`IP débloquée: ${ip}`);
@@ -307,8 +335,8 @@ class FraudDetector {
   /**
    * Enregistre un événement de clic dans la DB
    */
-  _logClick(clickData, isFraudulent, score, reasons) {
-    db.prepare(
+  async _logClick(clickData, isFraudulent, score, reasons) {
+    await db.prepare(
       `INSERT INTO click_events (campaign_id, ad_group_id, ip_address, user_agent, referrer,
         country, city, is_fraudulent, fraud_score, fraud_reasons)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -342,26 +370,29 @@ class FraudDetector {
   /**
    * Retourne les statistiques du détecteur
    */
-  getStats() {
-    const blockedCount = db.prepare(
-      "SELECT COUNT(*) as cnt FROM blocked_ips WHERE is_active = 1 AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))"
+  async getStats() {
+    const blockedCount = await db.prepare(
+      "SELECT COUNT(*) as cnt FROM blocked_ips WHERE is_active = 1 AND (expires_at IS NULL OR expires_at > now())"
     ).get();
 
-    const recentFraud = db.prepare(
-      "SELECT COUNT(*) as cnt FROM click_events WHERE is_fraudulent = 1 AND created_at > datetime('now', '-1 hour')"
+    const recentFraud = await db.prepare(
+      "SELECT COUNT(*) as cnt FROM click_events WHERE is_fraudulent = 1 AND created_at > now() - interval '1 hour'"
     ).get();
 
-    const totalRecent = db.prepare(
-      "SELECT COUNT(*) as cnt FROM click_events WHERE created_at > datetime('now', '-1 hour')"
+    const totalRecent = await db.prepare(
+      "SELECT COUNT(*) as cnt FROM click_events WHERE created_at > now() - interval '1 hour'"
     ).get();
+
+    const recentFraudCnt = Number(recentFraud?.cnt || 0);
+    const totalRecentCnt = Number(totalRecent?.cnt || 0);
 
     return {
       ...this.metrics,
-      activeBlockedIps: blockedCount?.cnt || 0,
-      recentFraudClicks: recentFraud?.cnt || 0,
-      recentTotalClicks: totalRecent?.cnt || 0,
-      fraudRate: totalRecent?.cnt > 0
-        ? ((recentFraud?.cnt || 0) / totalRecent.cnt * 100).toFixed(1)
+      activeBlockedIps: Number(blockedCount?.cnt || 0),
+      recentFraudClicks: recentFraudCnt,
+      recentTotalClicks: totalRecentCnt,
+      fraudRate: totalRecentCnt > 0
+        ? ((recentFraudCnt / totalRecentCnt) * 100).toFixed(1)
         : 0,
     };
   }
@@ -369,7 +400,7 @@ class FraudDetector {
   /**
    * Retourne les IPs bloquées
    */
-  getBlockedIps() {
+  async getBlockedIps() {
     return db.prepare(
       "SELECT * FROM blocked_ips WHERE is_active = 1 ORDER BY blocked_at DESC LIMIT 500"
     ).all();
@@ -378,7 +409,7 @@ class FraudDetector {
   /**
    * Nettoie les entrées expirées
    */
-  _cleanup() {
+  async _cleanup() {
     const now = Date.now();
     // Nettoie le cache IP
     for (const [ip, stats] of this.ipStats) {
@@ -389,8 +420,8 @@ class FraudDetector {
     }
 
     // Désactive les IPs bloquées expirées
-    db.prepare(
-      "UPDATE blocked_ips SET is_active = 0 WHERE expires_at IS NOT NULL AND datetime(expires_at) <= datetime('now')"
+    await db.prepare(
+      "UPDATE blocked_ips SET is_active = 0 WHERE expires_at IS NOT NULL AND expires_at <= now()"
     ).run();
   }
 

@@ -18,7 +18,7 @@ const morgan = require('morgan');
 const path = require('path');
 
 const config = require('./config');
-const { initDatabase } = require('./database');
+const { initDatabase, closeDatabase } = require('./database');
 
 // Services
 const adsApi = require('./services/adsApiClient');
@@ -32,6 +32,7 @@ const campaignsRouter = require('./routes/campaigns');
 const fraudRouter = require('./routes/fraud');
 const roiRouter = require('./routes/roi');
 const calendarRouter = require('./routes/calendar');
+const cronRouter = require('./routes/cron');
 
 // ============================================================
 //  Création de l'app Express
@@ -51,6 +52,7 @@ app.use('/api/campaigns', campaignsRouter);
 app.use('/api/fraud', fraudRouter);
 app.use('/api/roi', roiRouter);
 app.use('/api/calendar', calendarRouter);
+app.use('/api/cron', cronRouter);
 
 // --- Route de santé ---
 app.get('/api/health', (req, res) => {
@@ -107,14 +109,14 @@ async function initialize() {
     realtimeMonitor.startBroadcast();
   }
 
-  // 4. Bloqueur de clics abusifs
-  fraudDetector.start();
-
-  // 5. Optimiseur ROI
-  roiOptimizer.start();
-
-  // 6. Calendrier de diffusion
-  calendarScheduler.start();
+  // 4-6. Tâches de fond : en local via setInterval, sur Vercel via /api/cron
+  if (!isVercel) {
+    await fraudDetector.start();   // Bloqueur de clics abusifs
+    roiOptimizer.start();          // Optimiseur ROI
+    await calendarScheduler.start(); // Calendrier de diffusion
+  } else {
+    console.log('⏱️  Tâches de fond pilotées par Vercel Cron (/api/cron/all)');
+  }
 
   // 7. Démarrage du serveur HTTP (local uniquement)
   if (!isVercel) {
@@ -145,7 +147,8 @@ if (!process.env.VERCEL) {
     roiOptimizer.stop();
     calendarScheduler.stop();
     realtimeMonitor.stop();
-    server.close(() => {
+    server.close(async () => {
+      await closeDatabase().catch(() => {});
       console.log('✅ Serveur arrêté');
       process.exit(0);
     });

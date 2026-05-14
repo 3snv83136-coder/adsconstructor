@@ -7,15 +7,18 @@ const { db } = require('../database');
 const fraudDetector = require('../services/fraudDetector');
 const realtimeMonitor = require('../services/realtimeMonitor');
 
+// Wrapper pour propager les erreurs async vers le middleware d'erreur
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 // POST /api/fraud/analyze - Analyse un clic pour fraude
-router.post('/analyze', (req, res) => {
+router.post('/analyze', wrap(async (req, res) => {
   const { ip_address, user_agent, referrer, campaign_id, ad_group_id, country, city } = req.body;
 
   if (!ip_address) {
     return res.status(400).json({ error: 'ip_address requis' });
   }
 
-  const result = fraudDetector.analyzeClick({
+  const result = await fraudDetector.analyzeClick({
     ip_address,
     user_agent,
     referrer,
@@ -37,22 +40,22 @@ router.post('/analyze', (req, res) => {
   }
 
   res.json(result);
-});
+}));
 
 // GET /api/fraud/stats - Statistiques du détecteur
-router.get('/stats', (req, res) => {
-  const stats = fraudDetector.getStats();
+router.get('/stats', wrap(async (req, res) => {
+  const stats = await fraudDetector.getStats();
   res.json(stats);
-});
+}));
 
 // GET /api/fraud/blocked-ips - IPs bloquées
-router.get('/blocked-ips', (req, res) => {
-  const blockedIps = fraudDetector.getBlockedIps();
+router.get('/blocked-ips', wrap(async (req, res) => {
+  const blockedIps = await fraudDetector.getBlockedIps();
   res.json(blockedIps);
-});
+}));
 
 // POST /api/fraud/block-ip - Bloquer une IP manuellement
-router.post('/block-ip', (req, res) => {
+router.post('/block-ip', wrap(async (req, res) => {
   const { ip_address, reason, duration_minutes } = req.body;
 
   if (!ip_address) {
@@ -61,62 +64,67 @@ router.post('/block-ip', (req, res) => {
 
   const expiresAt = new Date(Date.now() + (duration_minutes || 60) * 60000).toISOString();
 
-  db.prepare(`
-    INSERT OR REPLACE INTO blocked_ips (ip_address, reason, blocked_at, expires_at, is_active)
-    VALUES (?, ?, datetime('now'), ?, 1)
+  await db.prepare(`
+    INSERT INTO blocked_ips (ip_address, reason, blocked_at, expires_at, is_active)
+    VALUES (?, ?, now(), ?::timestamptz, 1)
+    ON CONFLICT (ip_address) DO UPDATE SET
+      reason = EXCLUDED.reason,
+      blocked_at = now(),
+      expires_at = EXCLUDED.expires_at,
+      is_active = 1
   `).run(ip_address, reason || 'Blocage manuel', expiresAt);
 
   fraudDetector.blockedCache.add(ip_address);
 
-  db.prepare(
+  await db.prepare(
     "INSERT INTO audit_logs (event_type, severity, message) VALUES ('ip_blocked_manual', 'warning', ?)"
   ).run(`IP bloquée manuellement: ${ip_address}`);
 
   res.json({ success: true, ip_address, expiresAt });
-});
+}));
 
 // POST /api/fraud/unblock/:ip - Débloquer une IP
-router.post('/unblock/:ip', (req, res) => {
-  const result = fraudDetector.unblockIp(req.params.ip);
+router.post('/unblock/:ip', wrap(async (req, res) => {
+  const result = await fraudDetector.unblockIp(req.params.ip);
   res.json(result);
-});
+}));
 
 // GET /api/fraud/rules - Règles de fraude
-router.get('/rules', (req, res) => {
-  const rules = db.prepare('SELECT * FROM fraud_rules ORDER BY created_at DESC').all();
+router.get('/rules', wrap(async (req, res) => {
+  const rules = await db.prepare('SELECT * FROM fraud_rules ORDER BY created_at DESC').all();
   res.json(rules);
-});
+}));
 
 // POST /api/fraud/rules - Ajouter une règle
-router.post('/rules', (req, res) => {
+router.post('/rules', wrap(async (req, res) => {
   const { name, type, pattern, action } = req.body;
 
   if (!name || !type || !pattern) {
     return res.status(400).json({ error: 'name, type et pattern requis' });
   }
 
-  const result = db.prepare(
-    'INSERT INTO fraud_rules (name, type, pattern, action) VALUES (?, ?, ?, ?)'
+  const result = await db.prepare(
+    'INSERT INTO fraud_rules (name, type, pattern, action) VALUES (?, ?, ?, ?) RETURNING id'
   ).run(name, type, pattern, action || 'block');
 
   res.status(201).json({ id: result.lastInsertRowid, name, type, pattern, action });
-});
+}));
 
 // DELETE /api/fraud/rules/:id - Supprimer une règle
-router.delete('/rules/:id', (req, res) => {
-  db.prepare('DELETE FROM fraud_rules WHERE id = ?').run(req.params.id);
+router.delete('/rules/:id', wrap(async (req, res) => {
+  await db.prepare('DELETE FROM fraud_rules WHERE id = ?').run(req.params.id);
   res.json({ success: true });
-});
+}));
 
 // GET /api/fraud/recent - Clics frauduleux récents
-router.get('/recent', (req, res) => {
-  const recent = db.prepare(`
+router.get('/recent', wrap(async (req, res) => {
+  const recent = await db.prepare(`
     SELECT * FROM click_events
     WHERE is_fraudulent = 1
     ORDER BY created_at DESC
     LIMIT 100
   `).all();
   res.json(recent);
-});
+}));
 
 module.exports = router;

@@ -6,9 +6,12 @@ const router = express.Router();
 const { db } = require('../database');
 const roiOptimizer = require('../services/roiOptimizer');
 
+// Wrapper pour propager les erreurs async vers le middleware d'erreur
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 // GET /api/roi/status - État global du ROI
-router.get('/status', (req, res) => {
-  const campaigns = db.prepare("SELECT * FROM campaigns WHERE status != 'removed'").all();
+router.get('/status', wrap(async (req, res) => {
+  const campaigns = await db.prepare("SELECT * FROM campaigns WHERE status != 'removed'").all();
 
   const summary = campaigns.map(c => ({
     id: c.id,
@@ -27,19 +30,19 @@ router.get('/status', (req, res) => {
   }));
 
   res.json(summary);
-});
+}));
 
 // GET /api/roi/adjustments - Historique des ajustements
-router.get('/adjustments', (req, res) => {
-  const adjustments = roiOptimizer.getAdjustmentsHistory(50);
+router.get('/adjustments', wrap(async (req, res) => {
+  const adjustments = await roiOptimizer.getAdjustmentsHistory(50);
   res.json(adjustments);
-});
+}));
 
 // POST /api/roi/optimize-now - Lance un cycle d'optimisation immédiat
-router.post('/optimize-now', async (req, res) => {
+router.post('/optimize-now', wrap(async (req, res) => {
   const result = await roiOptimizer._runOptimizationCycle();
   res.json(result);
-});
+}));
 
 // GET /api/roi/settings - Configuration ROI
 router.get('/settings', (req, res) => {
