@@ -32,6 +32,7 @@ const campaignsRouter = require('./routes/campaigns');
 const fraudRouter = require('./routes/fraud');
 const roiRouter = require('./routes/roi');
 const calendarRouter = require('./routes/calendar');
+const settingsRouter = require('./routes/settings');
 
 // ============================================================
 //  Création de l'app Express
@@ -51,6 +52,7 @@ app.use('/api/campaigns', campaignsRouter);
 app.use('/api/fraud', fraudRouter);
 app.use('/api/roi', roiRouter);
 app.use('/api/calendar', calendarRouter);
+app.use('/api/settings', settingsRouter);
 
 // --- Route de santé ---
 app.get('/api/health', (req, res) => {
@@ -97,6 +99,11 @@ async function initialize() {
 
   // 1. Base de données
   await initDatabase();
+
+  // 1bis. Charge les credentials API stockés en DB (config persistée via UI)
+  if (settingsRouter.loadStoredCredentialsIntoConfig) {
+    settingsRouter.loadStoredCredentialsIntoConfig();
+  }
 
   // 2. Service Google Ads
   await adsApi.initialize();

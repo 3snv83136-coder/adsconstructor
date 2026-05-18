@@ -3,609 +3,1897 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AdWords Automator - Dashboard</title>
+  <title>AdWords Automator — Dashboard</title>
   <style>
     :root {
-      --bg: #0a0e14;
-      --bg-card: #131820;
-      --bg-card-hover: #1a1f2e;
-      --border: #1e2533;
-      --text: #c8ccd4;
-      --text-dim: #6c7380;
-      --green: #00c853;
-      --red: #ff1744;
-      --orange: #ff9100;
-      --blue: #448aff;
-      --purple: #7c4dff;
-      --cyan: #00bcd4;
+      --bg: #0b0d12;
+      --bg-elev: #131722;
+      --bg-card: #1a1f2e;
+      --bg-card-hover: #212739;
+      --border: #262d40;
+      --border-strong: #364056;
+      --text: #e4e7ed;
+      --text-dim: #8a94a7;
+      --text-faint: #5a6378;
+      --primary: #6366f1;
+      --primary-hover: #7c7ff5;
+      --primary-soft: rgba(99, 102, 241, 0.15);
+      --green: #10b981;
+      --red: #ef4444;
+      --orange: #f59e0b;
+      --blue: #3b82f6;
+      --purple: #a855f7;
+      --cyan: #06b6d4;
+      --radius: 14px;
+      --radius-sm: 8px;
+      --shadow-lg: 0 20px 50px -20px rgba(0, 0, 0, 0.6);
+      --shadow-glow: 0 0 0 1px rgba(99, 102, 241, 0.3), 0 8px 30px -8px rgba(99, 102, 241, 0.4);
     }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
-      min-height: 100vh;
       line-height: 1.5;
+      overflow-x: hidden;
     }
-    header {
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 24px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(800px circle at 0% 0%, rgba(99, 102, 241, 0.08), transparent 50%),
+        radial-gradient(600px circle at 100% 100%, rgba(168, 85, 247, 0.05), transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ============ LAYOUT ============ */
+    .app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ============ SIDEBAR ============ */
+    .sidebar {
+      background: var(--bg-elev);
+      border-right: 1px solid var(--border);
+      padding: 24px 16px;
       position: sticky;
       top: 0;
-      z-index: 100;
-    }
-    header h1 {
-      font-size: 1.1rem;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-    }
-    header h1 span { color: var(--blue); }
-    .status-bar {
+      height: 100vh;
       display: flex;
-      gap: 16px;
-      align-items: center;
-      font-size: 0.78rem;
-      color: var(--text-dim);
+      flex-direction: column;
+      gap: 8px;
     }
-    .status-dot {
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 12px 22px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 18px;
+    }
+    .brand-logo {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--primary), var(--purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 6px 20px -6px rgba(99, 102, 241, 0.6);
+    }
+    .brand-name { font-weight: 700; font-size: 0.95rem; letter-spacing: 0.2px; }
+    .brand-sub { font-size: 0.65rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; }
+
+    .nav-section { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-faint); padding: 14px 12px 6px; }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--text-dim);
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
+    }
+    .nav-item:hover { background: var(--bg-card); color: var(--text); }
+    .nav-item.active {
+      background: var(--primary-soft);
+      color: #fff;
+      border-color: rgba(99, 102, 241, 0.3);
+    }
+    .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+    .nav-badge {
+      margin-left: auto;
+      font-size: 0.65rem;
+      background: var(--bg-card);
+      padding: 2px 7px;
+      border-radius: 10px;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .nav-item.active .nav-badge { background: rgba(255,255,255,0.15); color: #fff; }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 12px;
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .ws-dot {
       width: 8px; height: 8px;
       border-radius: 50%;
-      display: inline-block;
-      margin-right: 4px;
+      background: var(--text-faint);
     }
-    .status-dot.online { background: var(--green); }
-    .status-dot.offline { background: var(--red); }
-    .status-dot.warning { background: var(--orange); }
-    main {
-      display: grid;
-      grid-template-columns: 1fr 300px;
-      grid-template-rows: auto 1fr;
-      gap: 16px;
-      padding: 16px 24px;
-      max-width: 1600px;
-      margin: 0 auto;
+    .ws-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .ws-dot.offline { background: var(--red); }
+
+    /* ============ MAIN CONTENT ============ */
+    .main {
+      padding: 28px 32px 60px;
+      max-width: 1400px;
+      width: 100%;
     }
-    .panel {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 16px;
-      overflow: hidden;
-    }
-    .panel-header {
+
+    .topbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 28px;
     }
-    .panel-header h2 {
+    .page-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .page-sub { color: var(--text-dim); font-size: 0.9rem; margin-top: 2px; }
+    .topbar-actions { display: flex; gap: 10px; align-items: center; }
+
+    /* ============ BUTTONS ============ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-card);
+      color: var(--text);
       font-size: 0.85rem;
       font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .btn:hover { background: var(--bg-card-hover); border-color: var(--text-faint); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 8px 20px -8px rgba(99, 102, 241, 0.6);
+    }
+    .btn-primary:hover { background: linear-gradient(135deg, var(--primary-hover), #8b5cf6); }
+    .btn-danger { background: rgba(239, 68, 68, 0.12); color: var(--red); border-color: rgba(239, 68, 68, 0.25); }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.2); }
+    .btn-success { background: rgba(16, 185, 129, 0.12); color: var(--green); border-color: rgba(16, 185, 129, 0.25); }
+    .btn-success:hover { background: rgba(16, 185, 129, 0.2); }
+    .btn-ghost { background: transparent; border: none; color: var(--text-dim); }
+    .btn-ghost:hover { background: var(--bg-card); color: var(--text); }
+    .btn-sm { padding: 6px 12px; font-size: 0.78rem; }
+    .btn-lg { padding: 14px 24px; font-size: 0.95rem; }
+
+    /* ============ CARDS ============ */
+    .card {
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      transition: border-color 0.2s;
+    }
+    .card-hover:hover { border-color: var(--border-strong); }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card-title-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: var(--primary-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .card-sub { color: var(--text-dim); font-size: 0.82rem; }
+
+    /* ============ STATS GRID ============ */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 60px; height: 60px;
+      background: var(--accent, var(--primary));
+      filter: blur(40px);
+      opacity: 0.25;
+      border-radius: 50%;
+    }
+    .stat-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
       text-transform: uppercase;
       letter-spacing: 1px;
-      color: var(--text-dim);
-    }
-    .badge {
-      font-size: 0.7rem;
-      padding: 2px 8px;
-      border-radius: 12px;
+      margin-bottom: 8px;
       font-weight: 600;
     }
-    .badge-active { background: rgba(0,200,83,0.15); color: var(--green); }
-    .badge-paused { background: rgba(255,145,0,0.15); color: var(--orange); }
-    .badge-fraud { background: rgba(255,23,68,0.15); color: var(--red); }
-    .campaigns-grid {
-      grid-column: 1;
+    .stat-value {
+      font-size: 1.9rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      font-variant-numeric: tabular-nums;
     }
-    .sidebar {
-      grid-column: 2;
-      grid-row: 1 / span 2;
+    .stat-trend {
+      font-size: 0.78rem;
+      margin-top: 6px;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .stat-trend.up { color: var(--green); }
+    .stat-trend.down { color: var(--red); }
+
+    /* ============ CAMPAIGN CARDS ============ */
+    .campaign-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
       gap: 16px;
     }
     .campaign-card {
-      background: var(--bg-card-hover);
-      border-radius: 6px;
-      padding: 14px;
-      margin-bottom: 10px;
-      border-left: 3px solid var(--border);
-      transition: all 0.2s;
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
       cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
     }
-    .campaign-card:hover { border-left-color: var(--blue); }
-    .campaign-card.active { border-left-color: var(--green); }
-    .campaign-card.paused { border-left-color: var(--orange); }
-    .campaign-header {
+    .campaign-card:hover {
+      border-color: var(--border-strong);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    .campaign-card.status-active { border-left: 3px solid var(--green); }
+    .campaign-card.status-paused { border-left: 3px solid var(--orange); }
+
+    .campaign-top {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
+      align-items: flex-start;
+      margin-bottom: 14px;
     }
-    .campaign-name { font-weight: 600; font-size: 0.9rem; }
-    .campaign-status {
-      font-size: 0.7rem;
-      padding: 2px 8px;
-      border-radius: 10px;
-    }
-    .campaign-status.active { background: rgba(0,200,83,0.15); color: var(--green); }
-    .campaign-status.paused { background: rgba(255,145,0,0.15); color: var(--orange); }
-    .metrics-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-top: 8px;
-    }
-    .metric {
-      text-align: center;
-    }
-    .metric-value {
-      font-size: 1.1rem;
+    .campaign-name {
       font-weight: 700;
-      font-variant-numeric: tabular-nums;
+      font-size: 1.02rem;
+      margin-bottom: 4px;
     }
-    .metric-label {
+    .campaign-id { font-size: 0.72rem; color: var(--text-faint); }
+
+    .pill {
+      font-size: 0.7rem;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .pill::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .pill-active { background: rgba(16, 185, 129, 0.15); color: var(--green); }
+    .pill-paused { background: rgba(245, 158, 11, 0.15); color: var(--orange); }
+    .pill-info { background: rgba(59, 130, 246, 0.15); color: var(--blue); }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .metric-box {
+      background: var(--bg);
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .metric-box-label {
       font-size: 0.65rem;
       color: var(--text-dim);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.8px;
+      margin-bottom: 4px;
+      font-weight: 600;
     }
-    .metric-value.roi-positive { color: var(--green); }
-    .metric-value.roi-negative { color: var(--red); }
-    .progress-bar {
-      height: 4px;
+    .metric-box-value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .roi-positive { color: var(--green); }
+    .roi-negative { color: var(--red); }
+
+    .budget-bar {
+      height: 6px;
       background: var(--border);
-      border-radius: 2px;
-      margin-top: 6px;
+      border-radius: 3px;
       overflow: hidden;
+      margin: 10px 0 4px;
     }
-    .progress-fill {
+    .budget-fill {
       height: 100%;
-      border-radius: 2px;
+      border-radius: 3px;
       transition: width 0.5s ease;
+      background: linear-gradient(90deg, var(--green), var(--primary));
     }
-    .progress-fill.good { background: var(--green); }
-    .progress-fill.warning { background: var(--orange); }
-    .progress-fill.danger { background: var(--red); }
-    .alert-item {
-      background: rgba(255,23,68,0.08);
-      border: 1px solid rgba(255,23,68,0.2);
-      border-radius: 6px;
-      padding: 10px 12px;
-      margin-bottom: 8px;
+    .budget-fill.warn { background: linear-gradient(90deg, var(--orange), #f97316); }
+    .budget-fill.danger { background: linear-gradient(90deg, var(--red), #dc2626); }
+    .budget-text {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .campaign-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ============ FORMS ============ */
+    .form-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .form-row-3 { grid-template-columns: repeat(3, 1fr); }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-label {
       font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-dim);
     }
-    .alert-item .alert-ip {
+    .form-label .req { color: var(--red); margin-left: 2px; }
+    .input, .select, .textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+      width: 100%;
+    }
+    .input:focus, .select:focus, .textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+    }
+    .input::placeholder { color: var(--text-faint); }
+    .form-hint { font-size: 0.72rem; color: var(--text-faint); }
+
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ============ EMPTY STATE ============ */
+    .empty-state {
+      text-align: center;
+      padding: 50px 20px;
+      color: var(--text-dim);
+    }
+    .empty-icon {
+      font-size: 38px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+    .empty-text { font-size: 0.92rem; margin-bottom: 4px; font-weight: 600; color: var(--text); }
+    .empty-sub { font-size: 0.82rem; }
+
+    /* ============ TABS ============ */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      background: var(--bg);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      width: fit-content;
+      margin-bottom: 18px;
+    }
+    .tab {
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: all 0.15s;
+    }
+    .tab.active { background: var(--bg-card); color: var(--text); }
+
+    /* ============ ALERTS ============ */
+    .alert-banner {
+      display: flex;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 18px;
+      border: 1px solid;
+      align-items: flex-start;
+    }
+    .alert-info { background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.25); color: #93c5fd; }
+    .alert-warn { background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.25); color: #fcd34d; }
+    .alert-success { background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.25); color: #6ee7b7; }
+    .alert-error { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.25); color: #fca5a5; }
+    .alert-icon { font-size: 18px; }
+    .alert-title { font-weight: 700; margin-bottom: 2px; }
+    .alert-text { font-size: 0.85rem; opacity: 0.9; }
+
+    /* ============ MODAL ============ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--shadow-lg);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 22px 26px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-title { font-size: 1.15rem; font-weight: 700; }
+    .modal-body { padding: 24px 26px; }
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 22px;
+      cursor: pointer;
+      width: 32px; height: 32px;
+      border-radius: 6px;
+    }
+    .modal-close:hover { background: var(--bg-card); color: var(--text); }
+
+    /* ============ TABLES ============ */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .data-table th, .data-table td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .data-table th {
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+    .data-table tr:hover td { background: var(--bg-card); }
+
+    /* ============ ALERT FEED ============ */
+    .alert-feed { display: flex; flex-direction: column; gap: 8px; }
+    .alert-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--red);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 0.85rem;
+    }
+    .alert-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .alert-ip {
+      font-family: 'SF Mono', 'Monaco', monospace;
       font-weight: 600;
       color: var(--red);
     }
-    .alert-item .alert-score {
-      font-size: 0.7rem;
-      color: var(--text-dim);
-    }
-    .alert-item .alert-reasons {
-      font-size: 0.7rem;
+    .alert-meta { font-size: 0.72rem; color: var(--text-dim); }
+    .alert-reasons {
+      font-size: 0.75rem;
       color: var(--orange);
-      margin-top: 2px;
+      margin-top: 4px;
     }
-    .schedule-item {
+
+    /* ============ VIEW MANAGEMENT ============ */
+    .view { display: none; }
+    .view.active { display: block; animation: fadeIn 0.25s ease; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ============ TOAST ============ */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 2000;
       display: flex;
-      justify-content: space-between;
-      padding: 6px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.78rem;
+      flex-direction: column;
+      gap: 10px;
     }
-    .schedule-item:last-child { border-bottom: none; }
-    .schedule-time { color: var(--cyan); font-weight: 500; }
-    .schedule-name { flex: 1; margin-left: 8px; }
-    .schedule-bid { color: var(--text-dim); font-size: 0.7rem; }
-    .event-item {
-      background: rgba(124,77,255,0.1);
-      border: 1px solid rgba(124,77,255,0.2);
-      border-radius: 4px;
-      padding: 8px 10px;
-      margin-bottom: 6px;
-      font-size: 0.78rem;
-    }
-    .event-type {
-      font-size: 0.65rem;
-      padding: 1px 6px;
-      border-radius: 8px;
-      display: inline-block;
-      margin-right: 6px;
-    }
-    .event-type.blackout { background: rgba(255,23,68,0.2); color: var(--red); }
-    .event-type.boost { background: rgba(0,200,83,0.2); color: var(--green); }
-    .event-type.pause { background: rgba(255,145,0,0.2); color: var(--orange); }
-    .empty-state {
-      text-align: center;
-      color: var(--text-dim);
-      padding: 24px;
-      font-size: 0.82rem;
-    }
-    .charts-row {
-      grid-column: 1;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-    .chart-container {
-      height: 120px;
-      position: relative;
-    }
-    .chart-line {
-      stroke: var(--blue);
-      stroke-width: 2;
-      fill: none;
-    }
-    .chart-area {
-      fill: url(#blueGradient);
-      opacity: 0.3;
-    }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    .live-indicator {
-      display: inline-flex;
+    .toast {
+      background: var(--bg-elev);
+      border: 1px solid var(--border-strong);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      box-shadow: var(--shadow-lg);
+      min-width: 260px;
+      animation: slideIn 0.25s ease;
+      display: flex;
       align-items: center;
-      gap: 4px;
-      font-size: 0.7rem;
-      color: var(--green);
+      gap: 12px;
     }
-    .pulse-dot {
-      width: 6px; height: 6px;
-      background: var(--green);
-      border-radius: 50%;
-      animation: pulse 1.5s infinite;
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error { border-left: 3px solid var(--red); }
+    .toast.info { border-left: 3px solid var(--blue); }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
     }
+
+    /* ============ RESPONSIVE ============ */
     @media (max-width: 900px) {
-      main {
-        grid-template-columns: 1fr;
+      .app { grid-template-columns: 1fr; }
+      .sidebar {
+        position: relative;
+        height: auto;
+        flex-direction: row;
+        overflow-x: auto;
+        padding: 12px;
       }
-      .sidebar { grid-column: 1; grid-row: auto; }
-      .charts-row { grid-template-columns: 1fr; }
+      .brand { border-bottom: none; padding: 6px 12px; margin-bottom: 0; }
+      .nav-section { display: none; }
+      .nav-item { white-space: nowrap; }
+      .sidebar-footer { display: none; }
+      .main { padding: 18px; }
+      .form-row, .form-row-3 { grid-template-columns: 1fr; }
     }
+
+    /* ============ MINI CHARTS ============ */
+    .chart-wrap { height: 140px; position: relative; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>⚡ <span>AdWords</span> Automator</h1>
-    <div class="status-bar">
-      <span><span class="status-dot online" id="ws-dot"></span> <span id="ws-status">Connexion...</span></span>
-      <span class="live-indicator"><span class="pulse-dot"></span> Live</span>
-      <span id="clock">--:--:--</span>
-    </div>
-  </header>
-
-  <main>
-    <!-- Campagnes -->
-    <section class="panel campaigns-grid">
-      <div class="panel-header">
-        <h2>📊 Campagnes</h2>
-        <span id="campaign-count" style="font-size:0.75rem;color:var(--text-dim)">0 actives</span>
-      </div>
-      <div id="campaigns-container">
-        <div class="empty-state">Chargement des campagnes...</div>
-      </div>
-    </section>
-
-    <!-- Sidebar -->
+  <div class="app">
+    <!-- ========== SIDEBAR ========== -->
     <aside class="sidebar">
-      <!-- Alertes fraude -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>🛡️ Alertes Fraude</h2>
-          <span id="fraud-count" class="badge badge-fraud">0</span>
+      <div class="brand">
+        <div class="brand-logo">⚡</div>
+        <div>
+          <div class="brand-name">AdWords</div>
+          <div class="brand-sub">Automator</div>
         </div>
-        <div id="alerts-container">
-          <div class="empty-state">Aucune alerte récente</div>
-        </div>
-      </section>
+      </div>
 
-      <!-- Calendrier du jour -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>📅 Aujourd'hui</h2>
-          <span style="font-size:0.7rem;color:var(--text-dim)" id="current-day"></span>
-        </div>
-        <div id="schedules-container">
-          <div class="empty-state">Chargement...</div>
-        </div>
-      </section>
+      <div class="nav-section">Pilotage</div>
+      <div class="nav-item active" data-view="overview"><span class="nav-icon">📊</span>Vue d'ensemble</div>
+      <div class="nav-item" data-view="campaigns"><span class="nav-icon">🎯</span>Campagnes <span class="nav-badge" id="nav-camp-count">0</span></div>
+      <div class="nav-item" data-view="calendar"><span class="nav-icon">📅</span>Calendrier</div>
 
-      <!-- Événements à venir -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>🔮 À venir</h2>
+      <div class="nav-section">Sécurité</div>
+      <div class="nav-item" data-view="fraud"><span class="nav-icon">🛡️</span>Anti-fraude <span class="nav-badge" id="nav-fraud-count">0</span></div>
+
+      <div class="nav-section">Configuration</div>
+      <div class="nav-item" data-view="api"><span class="nav-icon">🔌</span>Connexion API</div>
+      <div class="nav-item" data-view="settings"><span class="nav-icon">⚙️</span>Paramètres</div>
+
+      <div class="sidebar-footer">
+        <span class="ws-dot" id="ws-dot"></span>
+        <div>
+          <div style="font-weight: 600; font-size: 0.78rem;" id="ws-status">Connexion...</div>
+          <div style="font-size: 0.7rem; color: var(--text-faint);" id="ws-clock">--:--:--</div>
         </div>
-        <div id="events-container">
-          <div class="empty-state">Aucun événement</div>
-        </div>
-      </section>
+      </div>
     </aside>
 
-    <!-- Mini graphiques et résumé -->
-    <section class="panel charts-row">
-      <div>
-        <div class="panel-header"><h2>📈 ROI (dernière heure)</h2></div>
-        <div class="chart-container">
-          <svg width="100%" height="120" id="roi-chart"></svg>
+    <!-- ========== MAIN ========== -->
+    <main class="main">
+
+      <!-- ====== OVERVIEW ====== -->
+      <div class="view active" data-view="overview">
+        <div class="topbar">
+          <div>
+            <div class="page-title">Vue d'ensemble</div>
+            <div class="page-sub">Performance globale de vos campagnes en temps réel</div>
+          </div>
+          <div class="topbar-actions">
+            <button class="btn" onclick="refreshAll()">🔄 Rafraîchir</button>
+            <button class="btn btn-primary" onclick="openModal('new-campaign-modal')">+ Nouvelle campagne</button>
+          </div>
+        </div>
+
+        <div id="mode-banner"></div>
+
+        <div class="stats-grid">
+          <div class="stat-card" style="--accent: var(--primary)">
+            <div class="stat-label">Campagnes actives</div>
+            <div class="stat-value" id="stat-active">0</div>
+            <div class="stat-trend" id="stat-total"></div>
+          </div>
+          <div class="stat-card" style="--accent: var(--blue)">
+            <div class="stat-label">Clics du jour</div>
+            <div class="stat-value" id="stat-clicks">0</div>
+            <div class="stat-trend up">↑ Live</div>
+          </div>
+          <div class="stat-card" style="--accent: var(--green)">
+            <div class="stat-label">ROI moyen</div>
+            <div class="stat-value" id="stat-roi">0%</div>
+            <div class="stat-trend" id="stat-roi-trend"></div>
+          </div>
+          <div class="stat-card" style="--accent: var(--red)">
+            <div class="stat-label">Clics frauduleux bloqués</div>
+            <div class="stat-value" id="stat-fraud">0</div>
+            <div class="stat-trend">Protection active</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">🎯</div>
+                Campagnes en cours
+              </div>
+              <button class="btn btn-sm" onclick="showView('campaigns')">Tout voir →</button>
+            </div>
+            <div id="overview-campaigns">
+              <div class="empty-state"><div class="empty-icon">📭</div>
+                <div class="empty-text">Aucune campagne</div>
+                <div class="empty-sub">Créez votre première campagne pour démarrer</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">🛡️</div>
+                Alertes fraude
+              </div>
+              <button class="btn btn-sm" onclick="showView('fraud')">Détails →</button>
+            </div>
+            <div class="alert-feed" id="overview-alerts">
+              <div class="empty-state"><div class="empty-icon">✅</div>
+                <div class="empty-text">Tout est calme</div>
+                <div class="empty-sub">Aucune alerte récente</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <div>
-        <div class="panel-header"><h2>👆 Clics / minute</h2></div>
-        <div class="chart-container">
-          <svg width="100%" height="120" id="clicks-chart"></svg>
+
+      <!-- ====== CAMPAIGNS ====== -->
+      <div class="view" data-view="campaigns">
+        <div class="topbar">
+          <div>
+            <div class="page-title">Campagnes</div>
+            <div class="page-sub">Gérez et pilotez toutes vos campagnes Google Ads</div>
+          </div>
+          <div class="topbar-actions">
+            <button class="btn btn-primary btn-lg" onclick="openModal('new-campaign-modal')">+ Créer une campagne</button>
+          </div>
+        </div>
+
+        <div id="campaigns-grid" class="campaign-grid">
+          <div class="empty-state" style="grid-column: 1 / -1;">
+            <div class="empty-icon">🎯</div>
+            <div class="empty-text">Aucune campagne pour l'instant</div>
+            <div class="empty-sub">Commencez par créer votre première campagne</div>
+            <button class="btn btn-primary" style="margin-top: 18px;" onclick="openModal('new-campaign-modal')">+ Nouvelle campagne</button>
+          </div>
         </div>
       </div>
-    </section>
-  </main>
+
+      <!-- ====== CALENDAR ====== -->
+      <div class="view" data-view="calendar">
+        <div class="topbar">
+          <div>
+            <div class="page-title">Calendrier de diffusion</div>
+            <div class="page-sub">Planifiez vos plages horaires et événements (boost, blackout)</div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" data-tab="schedules">📋 Plannings hebdo</div>
+          <div class="tab" data-tab="events">🔮 Événements</div>
+        </div>
+
+        <div class="tab-content" data-tab="schedules">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">📅</div>
+                Ajouter une plage de diffusion
+              </div>
+            </div>
+            <form id="form-schedule" class="form-grid" onsubmit="submitSchedule(event)">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Campagne <span class="req">*</span></label>
+                  <select class="select" name="campaign_id" id="sched-camp" required></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Jour de la semaine <span class="req">*</span></label>
+                  <select class="select" name="day_of_week" required>
+                    <option value="1">Lundi</option><option value="2">Mardi</option>
+                    <option value="3">Mercredi</option><option value="4">Jeudi</option>
+                    <option value="5">Vendredi</option><option value="6">Samedi</option>
+                    <option value="0">Dimanche</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row-3 form-row">
+                <div class="form-group">
+                  <label class="form-label">Heure début</label>
+                  <input class="input" type="number" name="start_hour" min="0" max="23" value="9" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Heure fin</label>
+                  <input class="input" type="number" name="end_hour" min="0" max="23" value="18" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Ajustement enchère</label>
+                  <input class="input" type="number" name="bid_adjustment" step="0.1" min="0.1" max="3" value="1.0">
+                  <span class="form-hint">1.0 = neutre, 1.5 = +50%, 0.7 = −30%</span>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Ajouter la plage</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">⏰</div>
+                Aujourd'hui
+              </div>
+              <span class="pill pill-info" id="current-day"></span>
+            </div>
+            <div id="today-schedules">
+              <div class="empty-state"><div class="empty-icon">⌛</div><div class="empty-sub">Chargement...</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-content" data-tab="events" style="display: none;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">🔮</div>
+                Ajouter un événement
+              </div>
+            </div>
+            <form id="form-event" class="form-grid" onsubmit="submitEvent(event)">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Nom <span class="req">*</span></label>
+                  <input class="input" type="text" name="name" placeholder="Black Friday, Férié, etc." required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Type <span class="req">*</span></label>
+                  <select class="select" name="type" required>
+                    <option value="boost">🚀 Boost (augmente enchères)</option>
+                    <option value="blackout">⛔ Blackout (pause diffusion)</option>
+                    <option value="pause">⏸️ Pause programmée</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Date début <span class="req">*</span></label>
+                  <input class="input" type="datetime-local" name="start_date" required>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Date fin <span class="req">*</span></label>
+                  <input class="input" type="datetime-local" name="end_date" required>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Campagne (optionnel)</label>
+                  <select class="select" name="campaign_id" id="event-camp">
+                    <option value="">Toutes les campagnes</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Multiplicateur d'enchère</label>
+                  <input class="input" type="number" name="bid_multiplier" step="0.1" min="0" max="5" placeholder="1.5">
+                </div>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Créer l'événement</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">📌</div>
+                Événements à venir
+              </div>
+            </div>
+            <div id="events-list">
+              <div class="empty-state"><div class="empty-icon">📅</div><div class="empty-sub">Aucun événement programmé</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== FRAUD ====== -->
+      <div class="view" data-view="fraud">
+        <div class="topbar">
+          <div>
+            <div class="page-title">Anti-fraude</div>
+            <div class="page-sub">Détection en temps réel — 7 axes d'analyse</div>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card" style="--accent: var(--red)">
+            <div class="stat-label">IPs bloquées</div>
+            <div class="stat-value" id="fraud-blocked-count">0</div>
+          </div>
+          <div class="stat-card" style="--accent: var(--orange)">
+            <div class="stat-label">Clics analysés</div>
+            <div class="stat-value" id="fraud-analyzed">0</div>
+          </div>
+          <div class="stat-card" style="--accent: var(--purple)">
+            <div class="stat-label">Clics frauduleux</div>
+            <div class="stat-value" id="fraud-detected">0</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">🚫</div>
+                Bloquer une IP
+              </div>
+            </div>
+            <form id="form-block" class="form-grid" onsubmit="submitBlockIp(event)">
+              <div class="form-group">
+                <label class="form-label">Adresse IP <span class="req">*</span></label>
+                <input class="input" type="text" name="ip_address" placeholder="192.168.1.100" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Raison</label>
+                <input class="input" type="text" name="reason" placeholder="Activité suspecte, bot, etc.">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Durée (minutes)</label>
+                <input class="input" type="number" name="duration_minutes" value="60" min="1">
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-danger">🚫 Bloquer l'IP</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <div class="card-title-icon">⚡</div>
+                Tester un clic
+              </div>
+            </div>
+            <form id="form-test-click" class="form-grid" onsubmit="submitTestClick(event)">
+              <div class="form-group">
+                <label class="form-label">IP <span class="req">*</span></label>
+                <input class="input" type="text" name="ip_address" placeholder="1.2.3.4" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">User-Agent</label>
+                <input class="input" type="text" name="user_agent" placeholder="Mozilla/5.0...">
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn">⚡ Analyser</button>
+              </div>
+            </form>
+            <div id="test-click-result" style="margin-top: 14px;"></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon">🔴</div>
+              Alertes en direct
+            </div>
+            <span class="pill pill-info" id="fraud-live-count">0 récentes</span>
+          </div>
+          <div class="alert-feed" id="fraud-alerts">
+            <div class="empty-state"><div class="empty-icon">✅</div><div class="empty-sub">Aucune alerte</div></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon">📋</div>
+              IPs bloquées
+            </div>
+          </div>
+          <div id="blocked-ips-list">
+            <div class="empty-state"><div class="empty-icon">🔓</div><div class="empty-sub">Aucune IP bloquée</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== API CONNECTION ====== -->
+      <div class="view" data-view="api">
+        <div class="topbar">
+          <div>
+            <div class="page-title">Connexion Google Ads API</div>
+            <div class="page-sub">Connectez votre compte Google Ads pour piloter des campagnes réelles</div>
+          </div>
+        </div>
+
+        <div id="api-status-banner"></div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon">🔌</div>
+              Credentials OAuth2
+            </div>
+            <span class="pill" id="api-status-pill">Non configuré</span>
+          </div>
+
+          <div class="alert-banner alert-info" style="margin-bottom: 18px;">
+            <div class="alert-icon">ℹ️</div>
+            <div>
+              <div class="alert-title">Comment obtenir ces clés ?</div>
+              <div class="alert-text">
+                Créez un projet sur <strong>console.cloud.google.com</strong>, activez l'API Google Ads,
+                créez des identifiants OAuth2 (Client ID + Secret), puis générez un refresh token via
+                la console OAuth. Le <strong>Developer Token</strong> se demande dans votre compte Google Ads (Outils → API Center).
+              </div>
+            </div>
+          </div>
+
+          <form id="form-api" class="form-grid" onsubmit="submitApiCredentials(event)">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Client ID <span class="req">*</span></label>
+                <input class="input" type="text" name="clientId" placeholder="xxx.apps.googleusercontent.com" autocomplete="off">
+                <span class="form-hint" id="hint-clientId"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Client Secret <span class="req">*</span></label>
+                <input class="input" type="password" name="clientSecret" placeholder="GOCSPX-..." autocomplete="off">
+                <span class="form-hint" id="hint-clientSecret"></span>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Refresh Token <span class="req">*</span></label>
+                <input class="input" type="password" name="refreshToken" placeholder="1//0g..." autocomplete="off">
+                <span class="form-hint" id="hint-refreshToken"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Developer Token</label>
+                <input class="input" type="password" name="developerToken" placeholder="abcdef1234567890" autocomplete="off">
+                <span class="form-hint" id="hint-developerToken"></span>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Customer ID</label>
+                <input class="input" type="text" name="customerId" placeholder="123-456-7890">
+                <span class="form-hint" id="hint-customerId"></span>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Login Customer ID (MCC)</label>
+                <input class="input" type="text" name="loginCustomerId" placeholder="Optionnel">
+                <span class="form-hint" id="hint-loginCustomerId"></span>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-danger" onclick="deleteApiCredentials()">Effacer</button>
+              <button type="button" class="btn" onclick="testApiCredentials()">⚡ Tester</button>
+              <button type="submit" class="btn btn-primary">💾 Enregistrer & connecter</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon">📊</div>
+              Statut des services
+            </div>
+          </div>
+          <div id="services-status"></div>
+        </div>
+      </div>
+
+      <!-- ====== SETTINGS ====== -->
+      <div class="view" data-view="settings">
+        <div class="topbar">
+          <div>
+            <div class="page-title">Paramètres</div>
+            <div class="page-sub">Configuration des modules ROI, fraude, calendrier</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon">📈</div>
+              Optimiseur ROI
+            </div>
+          </div>
+          <div id="roi-settings"></div>
+          <div class="form-actions" style="justify-content: flex-start;">
+            <button class="btn btn-primary" onclick="runOptimizeNow()">⚡ Lancer un cycle d'optimisation</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+          <div class="card-header">
+            <div class="card-title">
+              <div class="card-title-icon">ℹ️</div>
+              À propos
+            </div>
+          </div>
+          <div style="font-size: 0.9rem; line-height: 1.7;">
+            <div><strong>AdWords Automator</strong> v1.0.0</div>
+            <div style="color: var(--text-dim); margin-top: 6px;">
+              Gestion automatisée de campagnes Google Ads · Détection de fraude · Optimisation ROI · Calendrier de diffusion
+            </div>
+            <div style="margin-top: 14px; font-size: 0.82rem; color: var(--text-dim);">
+              API REST : <code>/api/campaigns</code>, <code>/api/fraud</code>, <code>/api/roi</code>, <code>/api/calendar</code>, <code>/api/settings</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ========== MODAL: NEW CAMPAIGN ========== -->
+  <div class="modal-overlay" id="new-campaign-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">🎯 Nouvelle campagne</div>
+        <button class="modal-close" onclick="closeModal('new-campaign-modal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-campaign" class="form-grid" onsubmit="submitCampaign(event)">
+          <div class="form-group">
+            <label class="form-label">Nom de la campagne <span class="req">*</span></label>
+            <input class="input" type="text" name="name" placeholder="ex: Campagne Printemps 2026" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Budget quotidien (€) <span class="req">*</span></label>
+              <input class="input" type="number" name="dailyBudget" step="0.5" min="1" placeholder="50" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">CPC max (€)</label>
+              <input class="input" type="number" name="maxCpc" step="0.05" min="0.05" placeholder="1.50" value="1.0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Stratégie d'enchère</label>
+              <select class="select" name="bidStrategy">
+                <option value="manual_cpc">Manual CPC</option>
+                <option value="target_cpa">Target CPA</option>
+                <option value="maximize_conversions">Maximize Conversions</option>
+                <option value="target_roas">Target ROAS</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Target CPA (€)</label>
+              <input class="input" type="number" name="targetCpa" step="0.5" placeholder="15">
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn" onclick="closeModal('new-campaign-modal')">Annuler</button>
+            <button type="submit" class="btn btn-primary">Créer la campagne</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container"></div>
 
   <script>
     // ============================================================
-    //  WebSocket
+    //  STATE
     // ============================================================
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${location.host}`);
-
-    ws.onopen = () => {
-      document.getElementById('ws-dot').className = 'status-dot online';
-      document.getElementById('ws-status').textContent = 'Connecté';
+    const state = {
+      campaigns: new Map(),
+      fraudAlerts: [],
+      blockedIps: [],
+      apiStatus: null,
+      ws: null,
     };
+    const MAX_ALERTS = 30;
 
-    ws.onclose = () => {
-      document.getElementById('ws-dot').className = 'status-dot offline';
-      document.getElementById('ws-status').textContent = 'Déconnecté';
-    };
+    // ============================================================
+    //  WEBSOCKET
+    // ============================================================
+    function connectWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${location.host}`);
+      state.ws = ws;
+      ws.onopen = () => setWsStatus(true);
+      ws.onclose = () => { setWsStatus(false); setTimeout(connectWS, 3000); };
+      ws.onerror = () => setWsStatus(false);
+      ws.onmessage = e => handleWsMessage(JSON.parse(e.data));
+    }
 
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+    function setWsStatus(online) {
+      document.getElementById('ws-dot').className = `ws-dot ${online ? 'online' : 'offline'}`;
+      document.getElementById('ws-status').textContent = online ? 'En direct' : 'Déconnecté';
+    }
+
+    function handleWsMessage(msg) {
       switch (msg.type) {
         case 'initial_state':
-          renderInitialState(msg.data);
+          msg.data.campaigns.forEach(c => state.campaigns.set(c.id, c));
+          renderAll();
           break;
         case 'metrics_update':
-          updateMetrics(msg.data);
+          msg.data.campaigns.forEach(c => {
+            state.campaigns.set(c.id, { ...state.campaigns.get(c.id), ...c });
+          });
+          renderAll();
           break;
         case 'fraud_alert':
-          addFraudAlert(msg.data);
-          break;
-        case 'roi_adjustment':
-          addRoiAdjustment(msg.data);
+          state.fraudAlerts.unshift(msg.data);
+          if (state.fraudAlerts.length > MAX_ALERTS) state.fraudAlerts.pop();
+          renderFraudAlerts();
+          toast(`🚨 Clic suspect détecté: ${msg.data.ip}`, 'error');
           break;
         case 'campaign_status_change':
-          updateCampaignStatus(msg.data);
+          const c = state.campaigns.get(msg.data.campaignId);
+          if (c) { c.status = msg.data.newStatus; state.campaigns.set(c.id, c); renderAll(); }
           break;
       }
-    };
-
-    // ============================================================
-    //  Rendu
-    // ============================================================
-    let campaignsState = new Map();
-    let fraudAlerts = [];
-    const MAX_ALERTS = 20;
-
-    function renderInitialState(data) {
-      data.campaigns.forEach(c => campaignsState.set(c.id, c));
-      renderCampaigns();
-      loadCalendarData();
-      loadEventsData();
     }
 
-    function updateMetrics(data) {
-      data.campaigns.forEach(c => {
-        const existing = campaignsState.get(c.id);
-        campaignsState.set(c.id, { ...existing, ...c });
+    // ============================================================
+    //  NAVIGATION
+    // ============================================================
+    function showView(name) {
+      document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === name));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === name));
+
+      // Charge les données spécifiques à la vue
+      if (name === 'api') loadApiStatus();
+      if (name === 'settings') loadRoiSettings();
+      if (name === 'calendar') { loadCalendarState(); loadEvents(); }
+      if (name === 'fraud') { loadFraudStats(); loadBlockedIps(); }
+    }
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', () => showView(item.dataset.view));
+    });
+
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        const parent = t.parentElement;
+        parent.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+        const target = t.dataset.tab;
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = c.dataset.tab === target ? '' : 'none');
       });
+    });
+
+    // ============================================================
+    //  MODAL
+    // ============================================================
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    document.querySelectorAll('.modal-overlay').forEach(o => {
+      o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+    });
+
+    // ============================================================
+    //  TOASTS
+    // ============================================================
+    function toast(msg, type = 'info') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.innerHTML = `<div>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</div><div>${escapeHtml(msg)}</div>`;
+      document.getElementById('toast-container').appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+
+    // ============================================================
+    //  RENDER
+    // ============================================================
+    function renderAll() {
+      renderStats();
       renderCampaigns();
-      updateCharts();
+      renderCampaignSelects();
     }
 
-    function addFraudAlert(data) {
-      fraudAlerts.unshift(data);
-      if (fraudAlerts.length > MAX_ALERTS) fraudAlerts.pop();
-      renderAlerts();
-    }
+    function renderStats() {
+      const list = Array.from(state.campaigns.values());
+      const active = list.filter(c => c.status === 'active');
+      const totalClicks = list.reduce((s, c) => s + (c.clicks || 0), 0);
+      const avgRoi = list.length ? (list.reduce((s, c) => s + (c.roi || 0), 0) / list.length) : 0;
 
-    function addRoiAdjustment(data) {
-      // Flash visuel sur la campagne concernée
-      if (data.campaignId) {
-        const card = document.querySelector(`[data-campaign-id="${data.campaignId}"]`);
-        if (card) {
-          card.style.transition = 'none';
-          card.style.borderLeftColor = 'var(--purple)';
-          setTimeout(() => { card.style.transition = 'all 0.5s'; card.style.borderLeftColor = ''; }, 300);
-        }
-      }
-    }
+      const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
 
-    function updateCampaignStatus(data) {
-      const c = campaignsState.get(data.campaignId);
-      if (c) {
-        c.status = data.newStatus;
-        campaignsState.set(data.campaignId, c);
-        renderCampaigns();
+      setText('stat-active', active.length);
+      setText('stat-total', `sur ${list.length} au total`);
+      setText('stat-clicks', formatNum(totalClicks));
+      setText('stat-roi', avgRoi.toFixed(1) + '%');
+      setText('stat-fraud', state.fraudAlerts.length);
+      setText('nav-camp-count', list.length);
+      setText('nav-fraud-count', state.fraudAlerts.length);
+
+      const roiTrend = document.getElementById('stat-roi-trend');
+      if (roiTrend) {
+        roiTrend.textContent = avgRoi >= 0 ? '↑ Positif' : '↓ Négatif';
+        roiTrend.className = `stat-trend ${avgRoi >= 0 ? 'up' : 'down'}`;
       }
     }
 
     function renderCampaigns() {
-      const container = document.getElementById('campaigns-container');
-      const campaigns = Array.from(campaignsState.values());
+      const list = Array.from(state.campaigns.values());
+      const grid = document.getElementById('campaigns-grid');
+      const overview = document.getElementById('overview-campaigns');
 
-      if (campaigns.length === 0) {
-        container.innerHTML = '<div class="empty-state">Aucune campagne — créez-en une via l\'API</div>';
+      if (list.length === 0) {
+        const empty = `<div class="empty-state"><div class="empty-icon">🎯</div>
+          <div class="empty-text">Aucune campagne</div>
+          <div class="empty-sub">Créez votre première campagne pour démarrer</div>
+          <button class="btn btn-primary" style="margin-top: 18px;" onclick="openModal('new-campaign-modal')">+ Nouvelle campagne</button></div>`;
+        grid.innerHTML = empty;
+        overview.innerHTML = empty;
         return;
       }
 
-      document.getElementById('campaign-count').textContent =
-        `${campaigns.filter(c => c.status === 'active').length} actives / ${campaigns.length} total`;
-
-      container.innerHTML = campaigns.map(c => `
-        <div class="campaign-card ${c.status}" data-campaign-id="${c.id}">
-          <div class="campaign-header">
-            <span class="campaign-name">${escapeHtml(c.name)}</span>
-            <span class="campaign-status ${c.status}">${c.status === 'active' ? '▶ Actif' : '⏸ Pause'}</span>
-          </div>
-          <div class="metrics-row">
-            <div class="metric">
-              <div class="metric-value">${formatNum(c.impressions || 0)}</div>
-              <div class="metric-label">Impressions</div>
-            </div>
-            <div class="metric">
-              <div class="metric-value">${formatNum(c.clicks || 0)}</div>
-              <div class="metric-label">Clics</div>
-            </div>
-            <div class="metric">
-              <div class="metric-value">${(c.spend || 0).toFixed(2)} €</div>
-              <div class="metric-label">Coût</div>
-            </div>
-            <div class="metric">
-              <div class="metric-value ${(c.roi || 0) >= 0 ? 'roi-positive' : 'roi-negative'}">${(c.roi || 0).toFixed(1)}%</div>
-              <div class="metric-label">ROI</div>
-            </div>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill ${getBudgetClass(c.budgetUsage || 0)}" style="width:${Math.min(c.budgetUsage || 0, 100)}%"></div>
-          </div>
-          <div style="font-size:0.65rem;color:var(--text-dim);margin-top:4px;text-align:right">
-            Budget: ${(c.spend || 0).toFixed(2)} / ${(c.dailyBudget || 0).toFixed(2)} €
-            · CPC: ${(c.cpc || 0).toFixed(2)} €
-            · Conv: ${(c.conversions || 0).toFixed(1)}
-          </div>
-        </div>
-      `).join('');
+      const html = list.map(campaignCard).join('');
+      grid.innerHTML = html;
+      overview.innerHTML = `<div class="campaign-grid">${list.slice(0, 4).map(campaignCard).join('')}</div>`;
     }
 
-    function renderAlerts() {
-      const container = document.getElementById('alerts-container');
-      document.getElementById('fraud-count').textContent = fraudAlerts.length;
+    function campaignCard(c) {
+      const budget = c.dailyBudget || 0;
+      const spend = c.spend ?? c.current_spend ?? 0;
+      const usage = budget > 0 ? Math.min((spend / budget) * 100, 100) : 0;
+      const usageClass = usage > 90 ? 'danger' : usage > 70 ? 'warn' : '';
+      const status = c.status === 'active' ? 'active' : 'paused';
+      return `
+        <div class="campaign-card status-${status}" data-id="${c.id}">
+          <div class="campaign-top">
+            <div>
+              <div class="campaign-name">${escapeHtml(c.name)}</div>
+              <div class="campaign-id">ID #${c.id}</div>
+            </div>
+            <span class="pill pill-${status}">${status === 'active' ? 'Active' : 'En pause'}</span>
+          </div>
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <div class="metric-box-label">Impressions</div>
+              <div class="metric-box-value">${formatNum(c.impressions || 0)}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-box-label">Clics</div>
+              <div class="metric-box-value">${formatNum(c.clicks || 0)}</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-box-label">Coût</div>
+              <div class="metric-box-value">${spend.toFixed(2)} €</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-box-label">ROI</div>
+              <div class="metric-box-value ${(c.roi || 0) >= 0 ? 'roi-positive' : 'roi-negative'}">${(c.roi || 0).toFixed(1)}%</div>
+            </div>
+          </div>
+          <div class="budget-bar"><div class="budget-fill ${usageClass}" style="width: ${usage}%"></div></div>
+          <div class="budget-text">
+            <span>Budget : ${spend.toFixed(2)} / ${budget.toFixed(2)} €</span>
+            <span>CPC ${(c.cpc || c.maxCpc || 0).toFixed(2)} €</span>
+          </div>
+          <div class="campaign-actions">
+            ${status === 'active'
+              ? `<button class="btn btn-sm" onclick="event.stopPropagation();pauseCampaign(${c.id})">⏸ Pause</button>`
+              : `<button class="btn btn-sm btn-success" onclick="event.stopPropagation();resumeCampaign(${c.id})">▶ Activer</button>`}
+            <button class="btn btn-sm" onclick="event.stopPropagation();viewRoiAnalysis(${c.id})">📊 ROI</button>
+            <button class="btn btn-sm btn-danger" style="margin-left: auto;" onclick="event.stopPropagation();deleteCampaign(${c.id})">🗑️</button>
+          </div>
+        </div>
+      `;
+    }
 
-      if (fraudAlerts.length === 0) {
-        container.innerHTML = '<div class="empty-state">✅ Aucune alerte récente</div>';
+    function renderCampaignSelects() {
+      const opts = Array.from(state.campaigns.values())
+        .map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+      const schedSel = document.getElementById('sched-camp');
+      const evtSel = document.getElementById('event-camp');
+      if (schedSel) schedSel.innerHTML = opts || '<option value="">— Aucune campagne —</option>';
+      if (evtSel) evtSel.innerHTML = '<option value="">Toutes les campagnes</option>' + opts;
+    }
+
+    function renderFraudAlerts() {
+      const container = document.getElementById('fraud-alerts');
+      const overview = document.getElementById('overview-alerts');
+      if (!state.fraudAlerts.length) {
+        const empty = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-sub">Aucune alerte récente</div></div>`;
+        if (container) container.innerHTML = empty;
+        if (overview) overview.innerHTML = empty;
         return;
       }
-
-      container.innerHTML = fraudAlerts.map(a => `
+      const html = state.fraudAlerts.slice(0, 10).map(a => `
         <div class="alert-item">
-          <div><span class="alert-ip">${escapeHtml(a.ip || 'N/A')}</span></div>
-          <div class="alert-score">Score: ${a.score}/100 · ${a.timestamp ? new Date(a.timestamp).toLocaleTimeString() : ''}</div>
-          ${a.reasons ? `<div class="alert-reasons">${escapeHtml(Array.isArray(a.reasons) ? a.reasons.join(', ') : a.reasons)}</div>` : ''}
+          <div class="alert-item-header">
+            <span class="alert-ip">${escapeHtml(a.ip || 'N/A')}</span>
+            <span class="alert-meta">Score ${a.score}/100 · ${a.timestamp ? new Date(a.timestamp).toLocaleTimeString() : ''}</span>
+          </div>
+          ${a.reasons ? `<div class="alert-reasons">${escapeHtml(Array.isArray(a.reasons) ? a.reasons.join(' · ') : a.reasons)}</div>` : ''}
         </div>
       `).join('');
+      if (container) container.innerHTML = html;
+      if (overview) overview.innerHTML = state.fraudAlerts.slice(0, 5).map(a => `
+        <div class="alert-item">
+          <div class="alert-item-header">
+            <span class="alert-ip">${escapeHtml(a.ip || 'N/A')}</span>
+            <span class="alert-meta">${a.score}/100</span>
+          </div>
+        </div>
+      `).join('');
+      const cnt = document.getElementById('fraud-live-count');
+      if (cnt) cnt.textContent = `${state.fraudAlerts.length} récentes`;
     }
 
-    async function loadCalendarData() {
+    // ============================================================
+    //  API CALLS — CAMPAIGNS
+    // ============================================================
+    async function submitCampaign(e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      body.dailyBudget = parseFloat(body.dailyBudget);
+      body.maxCpc = parseFloat(body.maxCpc) || undefined;
+      body.targetCpa = body.targetCpa ? parseFloat(body.targetCpa) : undefined;
+      try {
+        const res = await fetch('/api/campaigns', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+        const c = await res.json();
+        toast(`Campagne « ${c.name} » créée`, 'success');
+        closeModal('new-campaign-modal');
+        e.target.reset();
+        loadCampaigns();
+      } catch (err) { toast('Erreur: ' + err.message, 'error'); }
+    }
+
+    async function pauseCampaign(id) {
+      try {
+        await fetch(`/api/campaigns/${id}/pause`, { method: 'POST' });
+        toast('Campagne mise en pause', 'success');
+        loadCampaigns();
+      } catch { toast('Erreur lors de la pause', 'error'); }
+    }
+
+    async function resumeCampaign(id) {
+      try {
+        await fetch(`/api/campaigns/${id}/resume`, { method: 'POST' });
+        toast('Campagne réactivée', 'success');
+        loadCampaigns();
+      } catch { toast('Erreur', 'error'); }
+    }
+
+    async function deleteCampaign(id) {
+      if (!confirm('Supprimer cette campagne ?')) return;
+      try {
+        await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
+        state.campaigns.delete(id);
+        toast('Campagne supprimée', 'success');
+        renderAll();
+      } catch { toast('Erreur', 'error'); }
+    }
+
+    async function viewRoiAnalysis(id) {
+      try {
+        const res = await fetch(`/api/campaigns/${id}/roi-analysis`);
+        const data = await res.json();
+        const msg = data.recommendation
+          ? `${data.recommendation.action || 'OK'}: ${data.recommendation.reason || ''}`
+          : 'Analyse en cours';
+        toast(msg, 'info');
+      } catch { toast('Pas de données ROI', 'error'); }
+    }
+
+    async function loadCampaigns() {
+      try {
+        const res = await fetch('/api/campaigns');
+        const list = await res.json();
+        state.campaigns.clear();
+        list.forEach(c => state.campaigns.set(c.id, {
+          id: c.id, name: c.name, status: c.status,
+          dailyBudget: c.daily_budget, spend: c.current_spend,
+          clicks: c.clicks, impressions: c.impressions,
+          conversions: c.conversions, ctr: c.ctr, roi: c.roi,
+          maxCpc: c.max_cpc, cpc: c.current_cpc || c.max_cpc,
+        }));
+        renderAll();
+      } catch (e) { console.error(e); }
+    }
+
+    // ============================================================
+    //  API CALLS — CALENDAR
+    // ============================================================
+    async function submitSchedule(e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      body.campaign_id = parseInt(body.campaign_id);
+      body.day_of_week = parseInt(body.day_of_week);
+      body.start_hour = parseInt(body.start_hour);
+      body.end_hour = parseInt(body.end_hour);
+      body.bid_adjustment = parseFloat(body.bid_adjustment) || 1.0;
+      try {
+        const res = await fetch('/api/calendar/schedules', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        toast('Plage de diffusion ajoutée', 'success');
+        e.target.reset();
+        loadCalendarState();
+      } catch (err) { toast('Erreur: ' + err.message, 'error'); }
+    }
+
+    async function submitEvent(e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      if (body.campaign_id) body.campaign_id = parseInt(body.campaign_id); else delete body.campaign_id;
+      body.start_date = new Date(body.start_date).toISOString();
+      body.end_date = new Date(body.end_date).toISOString();
+      if (body.bid_multiplier) body.bid_multiplier = parseFloat(body.bid_multiplier); else delete body.bid_multiplier;
+      try {
+        const res = await fetch('/api/calendar/events', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        toast('Événement créé', 'success');
+        e.target.reset();
+        loadEvents();
+      } catch (err) { toast('Erreur: ' + err.message, 'error'); }
+    }
+
+    async function loadCalendarState() {
       try {
         const res = await fetch('/api/calendar/state');
-        const state = await res.json();
-        renderCalendarState(state);
-      } catch (e) { /* ignore */ }
+        const s = await res.json();
+        const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+        const dayEl = document.getElementById('current-day');
+        if (dayEl) dayEl.textContent = `${days[s.currentDay] || ''} · ${s.currentTime || ''}`;
+
+        const cont = document.getElementById('today-schedules');
+        if (!cont) return;
+        if (!s.todaySchedules || !s.todaySchedules.length) {
+          cont.innerHTML = `<div class="empty-state"><div class="empty-icon">⏸</div><div class="empty-sub">Pas de diffusion aujourd'hui</div></div>`;
+          return;
+        }
+        cont.innerHTML = `<table class="data-table">
+          <thead><tr><th>Plage</th><th>Campagne</th><th>Ajustement</th></tr></thead>
+          <tbody>${s.todaySchedules.map(x => `
+            <tr><td><strong>${x.start} → ${x.end}</strong></td>
+            <td>${escapeHtml(x.campaignName || '—')}</td>
+            <td>${x.bidAdjustment && x.bidAdjustment !== 1 ? '×' + x.bidAdjustment : '<span style="color:var(--text-faint)">neutre</span>'}</td></tr>`).join('')}</tbody></table>`;
+      } catch (e) {}
     }
 
-    function renderCalendarState(state) {
-      if (!state) return;
-
-      const days = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-      document.getElementById('current-day').textContent = `${days[state.currentDay] || ''} ${state.currentTime || ''}`;
-
-      const schedContainer = document.getElementById('schedules-container');
-      if (!state.todaySchedules || state.todaySchedules.length === 0) {
-        schedContainer.innerHTML = '<div class="empty-state">Pas de diffusion aujourd\'hui</div>';
-      } else {
-        schedContainer.innerHTML = state.todaySchedules.map(s => `
-          <div class="schedule-item">
-            <span class="schedule-time">${s.start} - ${s.end}</span>
-            <span class="schedule-name">${escapeHtml(s.campaignName || '')}</span>
-            ${s.bidAdjustment && s.bidAdjustment !== 1 ? `<span class="schedule-bid">×${s.bidAdjustment}</span>` : ''}
-          </div>
-        `).join('');
-      }
-    }
-
-    async function loadEventsData() {
+    async function loadEvents() {
       try {
         const res = await fetch('/api/calendar/events');
         const events = await res.json();
-        renderEvents(events);
-      } catch (e) { /* ignore */ }
+        const cont = document.getElementById('events-list');
+        if (!cont) return;
+        if (!events.length) {
+          cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-sub">Aucun événement programmé</div></div>`;
+          return;
+        }
+        cont.innerHTML = `<table class="data-table">
+          <thead><tr><th>Type</th><th>Nom</th><th>Période</th><th>Multiplicateur</th><th></th></tr></thead>
+          <tbody>${events.map(e => `<tr>
+            <td><span class="pill pill-${e.type === 'boost' ? 'active' : e.type === 'blackout' ? 'paused' : 'info'}">${e.type}</span></td>
+            <td><strong>${escapeHtml(e.name)}</strong></td>
+            <td>${new Date(e.start_date).toLocaleDateString()} → ${new Date(e.end_date).toLocaleDateString()}</td>
+            <td>${e.bid_multiplier ? '×' + e.bid_multiplier : '—'}</td>
+            <td style="text-align:right"><button class="btn btn-sm btn-danger" onclick="deleteEvent(${e.id})">Suppr.</button></td>
+          </tr>`).join('')}</tbody></table>`;
+      } catch (e) {}
     }
 
-    function renderEvents(events) {
-      const container = document.getElementById('events-container');
-      if (!events || events.length === 0) {
-        container.innerHTML = '<div class="empty-state">Aucun événement à venir</div>';
-        return;
-      }
-      container.innerHTML = events.slice(0, 10).map(e => `
-        <div class="event-item">
-          <span class="event-type ${e.type}">${e.type.toUpperCase()}</span>
-          <span>${escapeHtml(e.name)}</span>
-          <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px">
-            ${new Date(e.start_date).toLocaleDateString()} → ${new Date(e.end_date).toLocaleDateString()}
-          </div>
-        </div>
-      `).join('');
-    }
-
-    // Mini graphiques (placeholder)
-    function updateCharts() {
-      // ROI chart placeholder
-      const roiSvg = document.getElementById('roi-chart');
-      if (roiSvg && roiSvg.children.length === 0) {
-        roiSvg.innerHTML = `
-          <defs><linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#448aff" stop-opacity="0.4"/>
-            <stop offset="100%" stop-color="#448aff" stop-opacity="0"/>
-          </linearGradient></defs>
-          <text x="50%" y="60" text-anchor="middle" fill="#6c7380" font-size="12">Données en direct via WebSocket</text>
-        `;
-      }
-      const clicksSvg = document.getElementById('clicks-chart');
-      if (clicksSvg && clicksSvg.children.length === 0) {
-        clicksSvg.innerHTML = `
-          <text x="50%" y="60" text-anchor="middle" fill="#6c7380" font-size="12">Métriques minute par minute</text>
-        `;
-      }
+    async function deleteEvent(id) {
+      if (!confirm('Supprimer cet événement ?')) return;
+      await fetch(`/api/calendar/events/${id}`, { method: 'DELETE' });
+      loadEvents();
+      toast('Événement supprimé', 'success');
     }
 
     // ============================================================
-    //  Utilitaires
+    //  API CALLS — FRAUD
+    // ============================================================
+    async function submitBlockIp(e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      body.duration_minutes = parseInt(body.duration_minutes) || 60;
+      try {
+        const res = await fetch('/api/fraud/block-ip', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        toast(`IP ${body.ip_address} bloquée`, 'success');
+        e.target.reset();
+        loadBlockedIps();
+      } catch (err) { toast('Erreur: ' + err.message, 'error'); }
+    }
+
+    async function submitTestClick(e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = Object.fromEntries(fd.entries());
+      const res = await fetch('/api/fraud/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      const cont = document.getElementById('test-click-result');
+      const cls = data.isFraudulent ? 'alert-error' : 'alert-success';
+      cont.innerHTML = `<div class="alert-banner ${cls}">
+        <div class="alert-icon">${data.isFraudulent ? '🚨' : '✅'}</div>
+        <div>
+          <div class="alert-title">${data.isFraudulent ? 'Clic suspect' : 'Clic légitime'} — Score ${data.score}/100</div>
+          <div class="alert-text">${(data.reasons || []).join(' · ') || 'Aucune anomalie détectée'}</div>
+        </div>
+      </div>`;
+    }
+
+    async function loadFraudStats() {
+      try {
+        const res = await fetch('/api/fraud/stats');
+        const stats = await res.json();
+        document.getElementById('fraud-analyzed').textContent = formatNum(stats.totalClicksAnalyzed || 0);
+        document.getElementById('fraud-detected').textContent = formatNum(stats.fraudulentClicks || 0);
+        document.getElementById('fraud-blocked-count').textContent = stats.blockedIps || 0;
+      } catch {}
+    }
+
+    async function loadBlockedIps() {
+      try {
+        const res = await fetch('/api/fraud/blocked-ips');
+        const list = await res.json();
+        state.blockedIps = list;
+        const cont = document.getElementById('blocked-ips-list');
+        if (!list.length) {
+          cont.innerHTML = `<div class="empty-state"><div class="empty-icon">🔓</div><div class="empty-sub">Aucune IP bloquée</div></div>`;
+          return;
+        }
+        cont.innerHTML = `<table class="data-table">
+          <thead><tr><th>IP</th><th>Raison</th><th>Bloquée le</th><th>Expire</th><th></th></tr></thead>
+          <tbody>${list.map(b => `<tr>
+            <td><strong>${escapeHtml(b.ip_address)}</strong></td>
+            <td>${escapeHtml(b.reason || '—')}</td>
+            <td>${b.blocked_at ? new Date(b.blocked_at).toLocaleString() : '—'}</td>
+            <td>${b.expires_at ? new Date(b.expires_at).toLocaleString() : 'permanente'}</td>
+            <td style="text-align:right"><button class="btn btn-sm" onclick="unblockIp('${escapeHtml(b.ip_address)}')">Débloquer</button></td>
+          </tr>`).join('')}</tbody></table>`;
+      } catch {}
+    }
+
+    async function unblockIp(ip) {
+      await fetch(`/api/fraud/unblock/${encodeURIComponent(ip)}`, { method: 'POST' });
+      toast(`IP ${ip} débloquée`, 'success');
+      loadBlockedIps();
+    }
+
+    // ============================================================
+    //  API CALLS — SETTINGS / API
+    // ============================================================
+    async function loadApiStatus() {
+      try {
+        const res = await fetch('/api/settings/api');
+        const data = await res.json();
+        state.apiStatus = data;
+
+        // Bandeau de statut
+        const banner = document.getElementById('api-status-banner');
+        if (data.simulated || !data.configured) {
+          banner.innerHTML = `<div class="alert-banner alert-warn">
+            <div class="alert-icon">⚠️</div>
+            <div>
+              <div class="alert-title">Mode simulation actif</div>
+              <div class="alert-text">L'app fonctionne avec des données simulées. Renseignez vos credentials Google Ads pour passer en mode réel.</div>
+            </div>
+          </div>`;
+        } else {
+          banner.innerHTML = `<div class="alert-banner alert-success">
+            <div class="alert-icon">✅</div>
+            <div>
+              <div class="alert-title">API connectée</div>
+              <div class="alert-text">Vos credentials Google Ads sont actifs. Les campagnes sont synchronisées en temps réel.</div>
+            </div>
+          </div>`;
+        }
+
+        // Pill statut
+        const pill = document.getElementById('api-status-pill');
+        if (data.configured && !data.simulated) {
+          pill.className = 'pill pill-active'; pill.textContent = 'Connecté';
+        } else if (data.configured && data.simulated) {
+          pill.className = 'pill pill-paused'; pill.textContent = 'Configuré (échec auth)';
+        } else {
+          pill.className = 'pill pill-info'; pill.textContent = 'Non configuré';
+        }
+
+        // Indicateurs de champs déjà saisis (masqués)
+        const fields = ['clientId', 'clientSecret', 'developerToken', 'refreshToken', 'customerId', 'loginCustomerId'];
+        fields.forEach(f => {
+          const hint = document.getElementById('hint-' + f);
+          if (hint) hint.textContent = data.masked[f] ? `✓ Stocké : ${data.masked[f]}` : '';
+        });
+
+        // Statut services
+        const sv = document.getElementById('services-status');
+        const ok = (b) => b ? '<span class="pill pill-active">OK</span>' : '<span class="pill pill-paused">Inactif</span>';
+        const healthRes = await fetch('/api/health').then(r => r.json()).catch(() => null);
+        if (healthRes) {
+          sv.innerHTML = `<table class="data-table">
+            <tr><td>Google Ads API</td><td>${ok(healthRes.services.adsApi)}</td><td style="color:var(--text-dim)">${data.simulated ? 'mode simulation' : 'mode réel'}</td></tr>
+            <tr><td>Détecteur de fraude</td><td>${ok(healthRes.services.fraudDetector)}</td><td></td></tr>
+            <tr><td>Optimiseur ROI</td><td>${ok(healthRes.services.roiOptimizer)}</td><td></td></tr>
+            <tr><td>Planificateur calendrier</td><td>${ok(healthRes.services.calendarScheduler)}</td><td></td></tr>
+            <tr><td>WebSocket temps réel</td><td>${ok(healthRes.services.realtimeMonitor)}</td><td></td></tr>
+            <tr><td>Uptime</td><td colspan="2">${Math.floor(healthRes.uptime)} s</td></tr>
+          </table>`;
+        }
+
+        // Bandeau mode dans la vue d'ensemble
+        const modeBanner = document.getElementById('mode-banner');
+        if (data.simulated || !data.configured) {
+          modeBanner.innerHTML = `<div class="alert-banner alert-info">
+            <div class="alert-icon">🎭</div>
+            <div>
+              <div class="alert-title">Mode démo</div>
+              <div class="alert-text">Données simulées — <a href="#" onclick="showView('api');return false;" style="color:#93c5fd;text-decoration:underline">Connecter Google Ads</a> pour basculer en mode réel.</div>
+            </div>
+          </div>`;
+        } else {
+          modeBanner.innerHTML = '';
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    async function submitApiCredentials(e) {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const body = {};
+      for (const [k, v] of fd.entries()) if (v && v.trim()) body[k] = v.trim();
+      if (!Object.keys(body).length) { toast('Aucun champ rempli', 'error'); return; }
+      try {
+        const res = await fetch('/api/settings/api', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.simulated) toast('Credentials enregistrés mais authentification échouée', 'error');
+        else toast('Credentials enregistrés et API connectée', 'success');
+        e.target.reset();
+        loadApiStatus();
+      } catch (err) { toast('Erreur: ' + err.message, 'error'); }
+    }
+
+    async function testApiCredentials() {
+      const form = document.getElementById('form-api');
+      const fd = new FormData(form);
+      const body = {};
+      for (const [k, v] of fd.entries()) if (v && v.trim()) body[k] = v.trim();
+      if (!body.clientId || !body.clientSecret || !body.refreshToken) {
+        toast('Renseignez au moins Client ID, Secret et Refresh Token', 'error'); return;
+      }
+      toast('Test en cours...', 'info');
+      try {
+        const res = await fetch('/api/settings/api/test', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.success) toast('Connexion OK ✓', 'success');
+        else toast('Échec : ' + (data.error || 'authentification refusée'), 'error');
+      } catch (err) { toast('Erreur: ' + err.message, 'error'); }
+    }
+
+    async function deleteApiCredentials() {
+      if (!confirm('Effacer les credentials API stockés ?')) return;
+      await fetch('/api/settings/api', { method: 'DELETE' });
+      toast('Credentials effacés', 'success');
+      document.getElementById('form-api').reset();
+      loadApiStatus();
+    }
+
+    // ============================================================
+    //  API CALLS — ROI SETTINGS
+    // ============================================================
+    async function loadRoiSettings() {
+      try {
+        const res = await fetch('/api/roi/settings');
+        const s = await res.json();
+        document.getElementById('roi-settings').innerHTML = `<table class="data-table">
+          <tr><td>Target CPA</td><td><strong>${s.targetCpa} €</strong></td></tr>
+          <tr><td>Seuil de coût minimal</td><td>${s.minCostThreshold} €</td></tr>
+          <tr><td>Ajustement max enchère</td><td>+${s.maxBidAdjustmentPct}%</td></tr>
+          <tr><td>Ajustement min enchère</td><td>${s.minBidAdjustmentPct}%</td></tr>
+          <tr><td>Intervalle de vérification</td><td>${s.checkIntervalMinutes} minutes</td></tr>
+          <tr><td>Fenêtre de conversion</td><td>${s.conversionWindowDays} jours</td></tr>
+        </table>
+        <div style="margin-top: 12px; font-size: 0.8rem; color: var(--text-dim);">
+          Ces valeurs proviennent des variables d'environnement. Modifiez votre <code>.env</code> pour les changer.
+        </div>`;
+      } catch {}
+    }
+
+    async function runOptimizeNow() {
+      toast('Cycle d\'optimisation lancé...', 'info');
+      try {
+        const res = await fetch('/api/roi/optimize-now', { method: 'POST' });
+        const data = await res.json();
+        toast('Optimisation terminée ✓', 'success');
+        loadCampaigns();
+      } catch { toast('Erreur', 'error'); }
+    }
+
+    // ============================================================
+    //  UTILS
     // ============================================================
     function formatNum(n) {
-      if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
       if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
-      return n.toString();
+      return Math.round(n).toString();
     }
 
-    function escapeHtml(str) {
-      const div = document.createElement('div');
-      div.textContent = str;
-      return div.innerHTML;
+    function escapeHtml(s) {
+      if (s === null || s === undefined) return '';
+      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     }
 
-    function getBudgetClass(usage) {
-      if (usage > 90) return 'danger';
-      if (usage > 70) return 'warning';
-      return 'good';
+    function refreshAll() {
+      loadCampaigns();
+      loadApiStatus();
+      loadFraudStats();
+      loadBlockedIps();
+      loadCalendarState();
+      loadEvents();
+      toast('Données rafraîchies', 'success');
     }
 
     // Horloge
-    function updateClock() {
-      document.getElementById('clock').textContent = new Date().toLocaleTimeString();
-    }
-    setInterval(updateClock, 1000);
-    updateClock();
-
-    // Rafraîchit le calendrier toutes les minutes
     setInterval(() => {
-      loadCalendarData();
-      loadEventsData();
-    }, 60000);
+      const el = document.getElementById('ws-clock');
+      if (el) el.textContent = new Date().toLocaleTimeString();
+    }, 1000);
 
-    updateCharts();
+    // Démarrage
+    connectWS();
+    loadCampaigns();
+    loadApiStatus();
+    loadFraudStats();
+
+    // Refresh périodique léger
+    setInterval(loadCampaigns, 60000);
   </script>
 </body>
 </html>
