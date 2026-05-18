@@ -14,6 +14,18 @@ router.get('/', async (req, res) => {
   res.json(campaigns);
 });
 
+// POST /api/campaigns/sync - Pull les campagnes depuis Google Ads
+// Doit être déclaré AVANT /:id pour éviter le conflit de route
+router.post('/sync', async (req, res) => {
+  try {
+    const result = await adsApi.syncFromGoogleAds();
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Sync Google Ads failed:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/campaigns/:id - Détail d'une campagne
 router.get('/:id', async (req, res) => {
   const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(req.params.id);
@@ -32,14 +44,53 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Nom et budget quotidien requis' });
   }
 
-  const result = await db.prepare(`
-    INSERT INTO campaigns (name, daily_budget, max_cpc, bid_strategy, target_cpa)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(name, dailyBudget, maxCpc || 1.0, bidStrategy || 'manual_cpc', targetCpa || null);
+  try {
+    // En mode réel : pousse vers Google Ads + persiste localement
+    // En mode simulation : juste DB locale (géré par adsApi.createCampaign)
+    const campaign = await adsApi.createCampaign({
+      name,
+      dailyBudget: Number(dailyBudget),
+      maxCpc: maxCpc !== undefined ? Number(maxCpc) : undefined,
+      bidStrategy: bidStrategy || 'manual_cpc',
+      targetCpa: targetCpa !== undefined ? Number(targetCpa) : null,
+    });
 
-  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(result.lastInsertRowid);
+    res.status(201).json(campaign);
+  } catch (err) {
+    console.error('Création campagne échouée:', err);
+    // Fallback : si l'appel Google échoue, on insère quand même en local
+    try {
+      const result = await db.prepare(`
+        INSERT INTO campaigns (name, daily_budget, max_cpc, bid_strategy, target_cpa)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(name, dailyBudget, maxCpc || 1.0, bidStrategy || 'manual_cpc', targetCpa || null);
+      const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(result.lastInsertRowid);
+      res.status(201).json({ ...campaign, warning: 'Google Ads push échoué: ' + err.message });
+    } catch (dbErr) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+});
 
-  res.status(201).json(campaign);
+// POST /api/campaigns/:id/ad-groups - Crée un ad group
+router.post('/:id/ad-groups', async (req, res) => {
+  const { name, maxCpc } = req.body;
+  if (!name) return res.status(400).json({ error: 'Nom requis' });
+
+  const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campagne non trouvée' });
+
+  try {
+    const adGroup = await adsApi.createAdGroup({
+      campaignId: parseInt(req.params.id, 10),
+      name,
+      maxCpc: maxCpc !== undefined ? Number(maxCpc) : 1.0,
+    });
+    res.status(201).json(adGroup);
+  } catch (err) {
+    console.error('Création ad group échouée:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PUT /api/campaigns/:id - Met à jour une campagne
@@ -49,6 +100,28 @@ router.put('/:id', async (req, res) => {
   if (!campaign) return res.status(404).json({ error: 'Campagne non trouvée' });
 
   const oldStatus = campaign.status;
+  const campaignId = parseInt(req.params.id, 10);
+
+  // Si on modifie le budget, on pousse côté Google Ads
+  if (dailyBudget !== undefined && Number(dailyBudget) !== Number(campaign.daily_budget)) {
+    await adsApi.updateCampaignBudget(campaignId, Number(dailyBudget)).catch(e => {
+      console.warn('Push budget Google Ads échoué:', e.message);
+    });
+  }
+
+  // Si on modifie le CPC max, on pousse côté Google Ads
+  if (maxCpc !== undefined && Number(maxCpc) !== Number(campaign.max_cpc)) {
+    await adsApi.updateCampaignBid(campaignId, Number(maxCpc)).catch(e => {
+      console.warn('Push CPC Google Ads échoué:', e.message);
+    });
+  }
+
+  // Si on modifie le status, on pousse côté Google Ads
+  if (status && status !== oldStatus && (status === 'active' || status === 'paused')) {
+    await adsApi.setCampaignStatus(campaignId, status).catch(e => {
+      console.warn('Push status Google Ads échoué:', e.message);
+    });
+  }
 
   await db.prepare(`
     UPDATE campaigns SET

@@ -772,6 +772,7 @@
             <div class="page-sub">Gérez et pilotez toutes vos campagnes Google Ads</div>
           </div>
           <div class="topbar-actions">
+            <button class="btn" onclick="syncGoogleAds()" title="Importe les campagnes depuis Google Ads">🔄 Sync Google Ads</button>
             <button class="btn btn-primary btn-lg" onclick="openModal('new-campaign-modal')">+ Créer une campagne</button>
           </div>
         </div>
@@ -1509,6 +1510,25 @@
           : 'Analyse en cours';
         toast(msg, 'info');
       } catch { toast('Pas de données ROI', 'error'); }
+    }
+
+    async function syncGoogleAds() {
+      toast('Synchronisation Google Ads en cours…', 'info');
+      try {
+        const res = await fetch('/api/campaigns/sync', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok || data.success === false) {
+          throw new Error(data.error || res.statusText);
+        }
+        if (data.simulated) {
+          toast('Mode simulation actif (aucune sync réelle)', 'info');
+        } else {
+          toast(`Sync OK — ${data.created} créées, ${data.updated} mises à jour (${data.total} total)`, 'success');
+        }
+        loadCampaigns();
+      } catch (err) {
+        toast('Erreur sync: ' + err.message, 'error');
+      }
     }
 
     async function loadCampaigns() {
