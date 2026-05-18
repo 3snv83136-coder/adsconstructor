@@ -7,8 +7,8 @@ const { db } = require('../database');
 const roiOptimizer = require('../services/roiOptimizer');
 
 // GET /api/roi/status - État global du ROI
-router.get('/status', (req, res) => {
-  const campaigns = db.prepare("SELECT * FROM campaigns WHERE status != 'removed'").all();
+router.get('/status', async (req, res) => {
+  const campaigns = await db.prepare("SELECT * FROM campaigns WHERE status != 'removed'").all();
 
   const summary = campaigns.map(c => ({
     id: c.id,
@@ -30,8 +30,8 @@ router.get('/status', (req, res) => {
 });
 
 // GET /api/roi/adjustments - Historique des ajustements
-router.get('/adjustments', (req, res) => {
-  const adjustments = roiOptimizer.getAdjustmentsHistory(50);
+router.get('/adjustments', async (req, res) => {
+  const adjustments = await roiOptimizer.getAdjustmentsHistory(50);
   res.json(adjustments);
 });
 

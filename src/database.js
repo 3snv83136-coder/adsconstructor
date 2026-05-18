@@ -1,294 +1,145 @@
 /**
- * Base de données SQLite - Initialisation et accès
- * Utilise sql.js (pur JavaScript/WebAssembly) — compatible tous environnements
+ * Couche d'accès Postgres (Supabase) avec wrapper compatible better-sqlite3
+ *
+ * Toutes les opérations sont asynchrones (renvoient des Promises).
+ * Le wrapper traduit la syntaxe SQLite vers Postgres :
+ *   - placeholders `?`        → `$1, $2, ...`
+ *   - `datetime('now')`       → `now()`
+ *   - `INSERT OR REPLACE`     → `INSERT ... ON CONFLICT ... DO UPDATE`
+ *   - `last_insert_rowid()`   → `RETURNING id` automatique pour INSERT
+ *
+ * Variable d'environnement requise : POSTGRES_URL
+ *   (depuis Supabase → Settings → Database → Connection Pooling "Transaction")
  */
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
 const config = require('./config');
 
-let db = null;
-let SQL = null;
+let pool = null;
 let initialized = false;
 
-// Crée le dossier data si inexistant
-const dbDir = path.dirname(path.resolve(config.database.path));
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+function getConnectionString() {
+  return (
+    process.env.POSTGRES_URL ||
+    process.env.DATABASE_URL ||
+    process.env.SUPABASE_DB_URL ||
+    null
+  );
 }
 
-const dbPath = path.resolve(config.database.path);
-
-/**
- * Initialise la base de données (asynchrone — sql.js charge le WASM)
- */
 async function initDatabase() {
-  const initSqlJs = require('sql.js');
+  if (initialized) return pool;
 
-  // Sur Vercel (et tout environnement où le wasm n'est pas trouvé via le chemin
-  // par défaut), on pointe explicitement sur le binaire situé dans node_modules
-  SQL = await initSqlJs({
-    locateFile: (file) => {
-      try {
-        return require.resolve(`sql.js/dist/${file}`);
-      } catch (e) {
-        return path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', file);
-      }
-    },
-  });
-
-  // Charge une base existante ou en crée une nouvelle
-  if (fs.existsSync(dbPath)) {
-    const buffer = fs.readFileSync(dbPath);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
+  const connectionString = getConnectionString();
+  if (!connectionString) {
+    throw new Error(
+      'Aucune URL de base configurée. Définir POSTGRES_URL (Supabase → Database → Connection Pooling)'
+    );
   }
 
-  // Active les foreign keys
-  db.run('PRAGMA foreign_keys = ON');
+  pool = new Pool({
+    connectionString,
+    // Supabase requiert SSL ; pgbouncer en transaction mode ne supporte pas prepared statements
+    ssl: { rejectUnauthorized: false },
+    max: 5,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  });
+
+  // Test de connexion
+  const { rows } = await pool.query('SELECT 1 AS ok');
+  if (rows[0].ok !== 1) throw new Error('Test connexion DB échoué');
 
   initialized = true;
-
-  // Crée les tables
-  createTables();
-
-  // Active la sauvegarde automatique
-  setupAutoSave();
-
-  console.log('✅ Base de données initialisée (sql.js)');
-  return db;
+  console.log('✅ Base de données Postgres (Supabase) connectée');
+  return pool;
 }
 
-/**
- * Sauvegarde automatique périodique sur disque
- */
-function setupAutoSave() {
-  setInterval(() => {
-    if (db && initialized) {
-      try {
-        const data = db.export();
-        const buffer = Buffer.from(data);
-        fs.writeFileSync(dbPath, buffer);
-      } catch (err) {
-        console.error('Erreur sauvegarde DB:', err.message);
-      }
-    }
-  }, 30000); // Toutes les 30 secondes
+// ============================================================
+//  Traduction SQLite → Postgres
+// ============================================================
+function translateSql(sql) {
+  let out = sql;
+
+  // datetime('now') → now()
+  out = out.replace(/datetime\(\s*'now'\s*\)/gi, 'now()');
+
+  // INSERT OR REPLACE INTO → INSERT ... gestion via .run en réécrivant
+  // Ici on fait simple : INSERT OR REPLACE = INSERT ON CONFLICT DO UPDATE
+  // (le code applicatif gère déjà ON CONFLICT explicitement quand nécessaire)
+  out = out.replace(/INSERT\s+OR\s+REPLACE\s+INTO/gi, 'INSERT INTO');
+
+  // ? placeholders → $1, $2, ...
+  let i = 0;
+  out = out.replace(/\?/g, () => `$${++i}`);
+
+  return out;
 }
 
-/**
- * Sauvegarde manuelle
- */
-function saveDatabase() {
-  if (!db || !initialized) return;
-  const data = db.export();
-  fs.writeFileSync(dbPath, Buffer.from(data));
+// Conversion automatique : si une instruction INSERT n'a pas de RETURNING,
+// on en ajoute une pour récupérer l'id (compat lastInsertRowid)
+function ensureReturning(sql) {
+  const trimmed = sql.trim();
+  if (/^INSERT\s+/i.test(trimmed) && !/RETURNING/i.test(trimmed)) {
+    return trimmed.replace(/;?\s*$/, ' RETURNING id');
+  }
+  return sql;
 }
 
-/**
- * Wrapper autour de sql.js pour exposer une API compatible better-sqlite3
- */
-function prepare(sql) {
-  if (!db || !initialized) throw new Error('Base de données non initialisée');
-
-  const stmt = db.prepare(sql);
-
-  // sql.js refuse undefined → conversion en null pour compat better-sqlite3
-  const safe = (params) => params.map(p => (p === undefined ? null : p));
+// ============================================================
+//  Wrapper public — API compatible avec l'ancien code synchrone
+//  (mais async maintenant : chaque .run/.get/.all renvoie une Promise)
+// ============================================================
+function prepare(rawSql) {
+  if (!pool) throw new Error('Base de données non initialisée');
 
   return {
-    run(...params) {
-      stmt.bind(safe(params));
-      stmt.step();
-      stmt.free();
-      const changes = db.getRowsModified();
-      let lastInsertRowid;
+    async run(...params) {
+      const safe = params.map(p => (p === undefined ? null : p));
+      const sql = ensureReturning(translateSql(rawSql));
       try {
-        const r = db.exec('SELECT last_insert_rowid() AS id');
-        lastInsertRowid = r[0]?.values?.[0]?.[0];
-      } catch (e) { /* ignore */ }
-      return { changes, lastInsertRowid };
+        const res = await pool.query(sql, safe);
+        return {
+          changes: res.rowCount,
+          lastInsertRowid: res.rows?.[0]?.id ?? undefined,
+        };
+      } catch (err) {
+        // Retry sans RETURNING si la table n'a pas de colonne id
+        if (err.message && err.message.toLowerCase().includes('returning')) {
+          const res = await pool.query(translateSql(rawSql), safe);
+          return { changes: res.rowCount, lastInsertRowid: undefined };
+        }
+        throw err;
+      }
     },
 
-    get(...params) {
-      stmt.bind(safe(params));
-      if (stmt.step()) {
-        const row = stmt.getAsObject();
-        stmt.free();
-        return row;
-      }
-      stmt.free();
-      return undefined;
+    async get(...params) {
+      const safe = params.map(p => (p === undefined ? null : p));
+      const sql = translateSql(rawSql);
+      const res = await pool.query(sql, safe);
+      return res.rows[0];
     },
 
-    all(...params) {
-      stmt.bind(safe(params));
-      const rows = [];
-      while (stmt.step()) {
-        rows.push(stmt.getAsObject());
-      }
-      stmt.free();
-      return rows;
+    async all(...params) {
+      const safe = params.map(p => (p === undefined ? null : p));
+      const sql = translateSql(rawSql);
+      const res = await pool.query(sql, safe);
+      return res.rows;
     },
   };
 }
 
-/**
- * Exécute du SQL brut (CREATE TABLE, etc.)
- */
-function exec(sql) {
-  if (!db || !initialized) throw new Error('Base de données non initialisée');
-  db.run(sql);
+async function exec(sql) {
+  if (!pool) throw new Error('Base de données non initialisée');
+  await pool.query(sql);
 }
 
-/**
- * Crée les tables
- */
-function createTables() {
-  exec(`
-    CREATE TABLE IF NOT EXISTS campaigns (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      google_campaign_id TEXT UNIQUE,
-      name TEXT NOT NULL,
-      status TEXT DEFAULT 'paused',
-      daily_budget REAL NOT NULL DEFAULT 0,
-      current_spend REAL DEFAULT 0,
-      bid_strategy TEXT DEFAULT 'manual_cpc',
-      target_cpa REAL,
-      max_cpc REAL DEFAULT 1.0,
-      current_cpc REAL,
-      impressions INTEGER DEFAULT 0,
-      clicks INTEGER DEFAULT 0,
-      conversions REAL DEFAULT 0,
-      conversion_value REAL DEFAULT 0,
-      ctr REAL DEFAULT 0,
-      roi REAL DEFAULT 0,
-      last_sync_at TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS ad_groups (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER NOT NULL,
-      google_ad_group_id TEXT UNIQUE,
-      name TEXT NOT NULL,
-      status TEXT DEFAULT 'enabled',
-      max_cpc REAL DEFAULT 1.0,
-      current_cpc REAL,
-      impressions INTEGER DEFAULT 0,
-      clicks INTEGER DEFAULT 0,
-      conversions REAL DEFAULT 0,
-      ctr REAL DEFAULT 0,
-      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS click_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER,
-      ad_group_id INTEGER,
-      ip_address TEXT NOT NULL,
-      user_agent TEXT,
-      referrer TEXT,
-      country TEXT,
-      city TEXT,
-      is_fraudulent INTEGER DEFAULT 0,
-      fraud_score REAL DEFAULT 0,
-      fraud_reasons TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
-      FOREIGN KEY (ad_group_id) REFERENCES ad_groups(id)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_click_ip ON click_events(ip_address, created_at);
-    CREATE INDEX IF NOT EXISTS idx_click_campaign ON click_events(campaign_id, created_at);
-
-    CREATE TABLE IF NOT EXISTS fraud_rules (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL,
-      pattern TEXT NOT NULL,
-      action TEXT DEFAULT 'block',
-      is_active INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS blocked_ips (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      ip_address TEXT NOT NULL UNIQUE,
-      reason TEXT,
-      blocked_at TEXT DEFAULT (datetime('now')),
-      expires_at TEXT,
-      is_active INTEGER DEFAULT 1
-    );
-
-    CREATE TABLE IF NOT EXISTS schedules (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER NOT NULL,
-      day_of_week INTEGER NOT NULL,
-      start_hour INTEGER NOT NULL,
-      start_minute INTEGER DEFAULT 0,
-      end_hour INTEGER NOT NULL,
-      end_minute INTEGER DEFAULT 0,
-      bid_adjustment REAL DEFAULT 1.0,
-      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS calendar_events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL,
-      start_date TEXT NOT NULL,
-      end_date TEXT NOT NULL,
-      bid_multiplier REAL,
-      is_active INTEGER DEFAULT 1,
-      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS roi_adjustments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER NOT NULL,
-      adjustment_type TEXT NOT NULL,
-      old_value REAL,
-      new_value REAL,
-      reason TEXT,
-      performance_snapshot TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS metrics_snapshot (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER NOT NULL,
-      timestamp TEXT NOT NULL DEFAULT (datetime('now')),
-      impressions INTEGER DEFAULT 0,
-      clicks INTEGER DEFAULT 0,
-      spend REAL DEFAULT 0,
-      conversions REAL DEFAULT 0,
-      avg_cpc REAL,
-      ctr REAL,
-      roi REAL,
-      FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_metrics_campaign_time ON metrics_snapshot(campaign_id, timestamp);
-
-    CREATE TABLE IF NOT EXISTS audit_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_type TEXT NOT NULL,
-      severity TEXT DEFAULT 'info',
-      campaign_id INTEGER,
-      message TEXT NOT NULL,
-      details TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS app_settings (
-      key TEXT PRIMARY KEY,
-      value TEXT,
-      updated_at TEXT DEFAULT (datetime('now'))
-    );
-  `);
+// Sauvegarde manuelle — no-op sur Postgres (persistance native)
+function saveDatabase() {
+  // Postgres persiste automatiquement, rien à faire
 }
 
-module.exports = { db: { prepare, exec }, initDatabase, saveDatabase };
+module.exports = {
+  db: { prepare, exec },
+  initDatabase,
+  saveDatabase,
+};

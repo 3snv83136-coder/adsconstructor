@@ -29,15 +29,15 @@ class CalendarScheduler {
     console.log('📅 Calendrier de diffusion démarré (granularité: minute)');
 
     // Charge tous les plannings actifs
-    this._loadAllSchedules();
+    this._loadAllSchedules().catch(err => console.error('Erreur chargement plannings:', err.message));
 
     // Vérifie toutes les minutes l'état des campagnes
     this.minuteInterval = setInterval(() => {
-      this._minuteTick();
+      this._minuteTick().catch(err => console.error('Erreur tick calendrier:', err.message));
     }, 60000);
 
     // Exécute immédiatement le premier tick
-    this._minuteTick();
+    this._minuteTick().catch(err => console.error('Erreur tick calendrier:', err.message));
 
     console.log(`📅 ${this.activeTimers.size} campagne(s) planifiée(s)`);
   }
@@ -45,7 +45,7 @@ class CalendarScheduler {
   /**
    * Tick minute par minute - vérifie l'état de chaque campagne
    */
-  _minuteTick() {
+  async _minuteTick() {
     if (!this.isRunning) return;
 
     const now = new Date();
@@ -55,28 +55,28 @@ class CalendarScheduler {
     const currentTime = currentHour * 60 + currentMinute;
 
     // Récupère toutes les campagnes actives
-    const campaigns = db.prepare(
+    const campaigns = await db.prepare(
       "SELECT * FROM campaigns WHERE status != 'removed'"
     ).all();
 
     for (const campaign of campaigns) {
-      this._checkCampaignSchedule(campaign, currentDay, currentHour, currentMinute, now);
+      await this._checkCampaignSchedule(campaign, currentDay, currentHour, currentMinute, now);
     }
   }
 
   /**
    * Vérifie le planning d'une campagne pour le tick actuel
    */
-  _checkCampaignSchedule(campaign, currentDay, currentHour, currentMinute, now) {
+  async _checkCampaignSchedule(campaign, currentDay, currentHour, currentMinute, now) {
     // 1. Vérifie d'abord les événements exceptionnels (prioritaires)
-    const activeEvent = this._getActiveCalendarEvent(campaign.id, now);
+    const activeEvent = await this._getActiveCalendarEvent(campaign.id, now);
     if (activeEvent) {
-      this._applyCalendarEvent(campaign, activeEvent);
+      await this._applyCalendarEvent(campaign, activeEvent);
       return;
     }
 
     // 2. Vérifie le planning hebdomadaire
-    const currentSchedule = db.prepare(`
+    const currentSchedule = await db.prepare(`
       SELECT * FROM schedules
       WHERE campaign_id = ?
         AND day_of_week = ?
@@ -93,16 +93,16 @@ class CalendarScheduler {
     if (currentSchedule) {
       // Dans la plage de diffusion → activer si pause
       if (campaign.status === 'paused') {
-        this._activateCampaign(campaign, currentSchedule);
+        await this._activateCampaign(campaign, currentSchedule);
       }
       // Appliquer l'ajustement d'enchère si différent
       if (campaign.max_cpc !== campaign.max_cpc * currentSchedule.bid_adjustment) {
-        this._applyBidAdjustment(campaign, currentSchedule.bid_adjustment);
+        await this._applyBidAdjustment(campaign, currentSchedule.bid_adjustment);
       }
     } else {
       // Hors plage de diffusion → mettre en pause si active
       if (campaign.status === 'active') {
-        this._pauseCampaignForSchedule(campaign);
+        await this._pauseCampaignForSchedule(campaign);
       }
     }
   }
@@ -110,11 +110,11 @@ class CalendarScheduler {
   /**
    * Récupère un événement calendaire actif
    */
-  _getActiveCalendarEvent(campaignId, now) {
+  async _getActiveCalendarEvent(campaignId, now) {
     const nowIso = now.toISOString();
 
     // Événements spécifiques à la campagne
-    let event = db.prepare(`
+    let event = await db.prepare(`
       SELECT * FROM calendar_events
       WHERE campaign_id = ? AND is_active = 1
         AND start_date <= ? AND end_date >= ?
@@ -129,7 +129,7 @@ class CalendarScheduler {
 
     // Événements globaux (campaign_id IS NULL)
     if (!event) {
-      event = db.prepare(`
+      event = await db.prepare(`
         SELECT * FROM calendar_events
         WHERE campaign_id IS NULL AND is_active = 1
           AND start_date <= ? AND end_date >= ?
@@ -143,12 +143,12 @@ class CalendarScheduler {
   /**
    * Applique un événement calendaire
    */
-  _applyCalendarEvent(campaign, event) {
+  async _applyCalendarEvent(campaign, event) {
     switch (event.type) {
       case 'blackout':
         // Pause forcée
         if (campaign.status === 'active') {
-          db.prepare(
+          await db.prepare(
             "UPDATE campaigns SET status = 'paused', updated_at = datetime('now') WHERE id = ?"
           ).run(campaign.id);
           console.log(`📅 BLACKOUT: campagne ${campaign.name} mise en pause (${event.name})`);
@@ -158,19 +158,19 @@ class CalendarScheduler {
       case 'boost':
         // Activation + multiplicateur d'enchère
         if (campaign.status === 'paused') {
-          db.prepare(
+          await db.prepare(
             "UPDATE campaigns SET status = 'active', updated_at = datetime('now') WHERE id = ?"
           ).run(campaign.id);
         }
         if (event.bid_multiplier && event.bid_multiplier !== 1) {
-          this._applyBidAdjustment(campaign, event.bid_multiplier);
+          await this._applyBidAdjustment(campaign, event.bid_multiplier);
         }
         console.log(`📅 BOOST: campagne ${campaign.name} (${event.name}) x${event.bid_multiplier}`);
         break;
 
       case 'pause':
         if (campaign.status === 'active') {
-          db.prepare(
+          await db.prepare(
             "UPDATE campaigns SET status = 'paused', updated_at = datetime('now') WHERE id = ?"
           ).run(campaign.id);
           console.log(`📅 PAUSE: campagne ${campaign.name} (${event.name})`);
@@ -182,8 +182,8 @@ class CalendarScheduler {
   /**
    * Active une campagne selon son planning
    */
-  _activateCampaign(campaign, schedule) {
-    db.prepare(
+  async _activateCampaign(campaign, schedule) {
+    await db.prepare(
       "UPDATE campaigns SET status = 'active', updated_at = datetime('now') WHERE id = ?"
     ).run(campaign.id);
     console.log(`▶️  Campagne ${campaign.name} activée (planning jour ${schedule.day_of_week}, ${schedule.start_hour}h${String(schedule.start_minute).padStart(2, '0')})`);
@@ -192,8 +192,8 @@ class CalendarScheduler {
   /**
    * Met en pause une campagne hors planning
    */
-  _pauseCampaignForSchedule(campaign) {
-    db.prepare(
+  async _pauseCampaignForSchedule(campaign) {
+    await db.prepare(
       "UPDATE campaigns SET status = 'paused', updated_at = datetime('now') WHERE id = ?"
     ).run(campaign.id);
   }
@@ -201,9 +201,9 @@ class CalendarScheduler {
   /**
    * Applique un ajustement d'enchère
    */
-  _applyBidAdjustment(campaign, multiplier) {
+  async _applyBidAdjustment(campaign, multiplier) {
     const newCpc = parseFloat((campaign.max_cpc * multiplier).toFixed(2));
-    db.prepare(
+    await db.prepare(
       "UPDATE campaigns SET max_cpc = ?, updated_at = datetime('now') WHERE id = ?"
     ).run(newCpc, campaign.id);
   }
@@ -211,8 +211,8 @@ class CalendarScheduler {
   /**
    * Charge tous les plannings depuis la base
    */
-  _loadAllSchedules() {
-    const schedules = db.prepare(`
+  async _loadAllSchedules() {
+    const schedules = await db.prepare(`
       SELECT s.*, c.name as campaign_name, c.status
       FROM schedules s
       JOIN campaigns c ON s.campaign_id = c.id
@@ -230,7 +230,7 @@ class CalendarScheduler {
   /**
    * Ajoute une plage de diffusion
    */
-  addSchedule(campaignId, dayOfWeek, startHour, startMinute, endHour, endMinute, bidAdjustment = 1.0) {
+  async addSchedule(campaignId, dayOfWeek, startHour, startMinute, endHour, endMinute, bidAdjustment = 1.0) {
     // Validation
     if (dayOfWeek < 0 || dayOfWeek > 6) throw new Error('Jour invalide (0-6, 0=dimanche)');
     if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) throw new Error('Heure invalide (0-23)');
@@ -240,13 +240,13 @@ class CalendarScheduler {
     const endTime = endHour * 60 + endMinute;
     if (startTime >= endTime) throw new Error('L\'heure de début doit être avant l\'heure de fin');
 
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO schedules (campaign_id, day_of_week, start_hour, start_minute, end_hour, end_minute, bid_adjustment)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(campaignId, dayOfWeek, startHour, startMinute, endHour, endMinute, bidAdjustment);
 
     // Recharge les plannings pour cette campagne
-    const schedules = db.prepare('SELECT * FROM schedules WHERE campaign_id = ?').all(campaignId);
+    const schedules = await db.prepare('SELECT * FROM schedules WHERE campaign_id = ?').all(campaignId);
     this.activeTimers.set(campaignId, { schedules });
 
     return {
@@ -262,16 +262,16 @@ class CalendarScheduler {
   /**
    * Supprime une plage de diffusion
    */
-  removeSchedule(scheduleId) {
-    db.prepare('DELETE FROM schedules WHERE id = ?').run(scheduleId);
+  async removeSchedule(scheduleId) {
+    await db.prepare('DELETE FROM schedules WHERE id = ?').run(scheduleId);
     return { success: true, scheduleId };
   }
 
   /**
    * Liste les plannings d'une campagne
    */
-  getCampaignSchedules(campaignId) {
-    return db.prepare(`
+  async getCampaignSchedules(campaignId) {
+    return await db.prepare(`
       SELECT * FROM schedules
       WHERE campaign_id = ?
       ORDER BY day_of_week, start_hour, start_minute
@@ -281,8 +281,8 @@ class CalendarScheduler {
   /**
    * Liste tous les plannings
    */
-  getAllSchedules() {
-    return db.prepare(`
+  async getAllSchedules() {
+    return await db.prepare(`
       SELECT s.*, c.name as campaign_name
       FROM schedules s
       JOIN campaigns c ON s.campaign_id = c.id
@@ -297,12 +297,12 @@ class CalendarScheduler {
   /**
    * Ajoute un événement calendaire
    */
-  addCalendarEvent(campaignId, name, type, startDate, endDate, bidMultiplier = null) {
+  async addCalendarEvent(campaignId, name, type, startDate, endDate, bidMultiplier = null) {
     if (!['blackout', 'boost', 'pause'].includes(type)) {
       throw new Error('Type invalide: blackout, boost, pause');
     }
 
-    const result = db.prepare(`
+    const result = await db.prepare(`
       INSERT INTO calendar_events (campaign_id, name, type, start_date, end_date, bid_multiplier)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(campaignId || null, name, type, startDate, endDate, bidMultiplier);
@@ -321,15 +321,15 @@ class CalendarScheduler {
   /**
    * Supprime un événement calendaire
    */
-  removeCalendarEvent(eventId) {
-    db.prepare('UPDATE calendar_events SET is_active = 0 WHERE id = ?').run(eventId);
+  async removeCalendarEvent(eventId) {
+    await db.prepare('UPDATE calendar_events SET is_active = 0 WHERE id = ?').run(eventId);
     return { success: true, eventId };
   }
 
   /**
    * Liste les événements calendaires
    */
-  getCalendarEvents(campaignId = null, activeOnly = true) {
+  async getCalendarEvents(campaignId = null, activeOnly = true) {
     let query = 'SELECT * FROM calendar_events';
     const params = [];
 
@@ -344,7 +344,7 @@ class CalendarScheduler {
 
     query += ' ORDER BY start_date DESC';
 
-    return db.prepare(query).all(...params);
+    return await db.prepare(query).all(...params);
   }
 
   // ============================================================
@@ -354,19 +354,19 @@ class CalendarScheduler {
   /**
    * Retourne l'état actuel du calendrier
    */
-  getCurrentState() {
+  async getCurrentState() {
     const now = new Date();
     const nowIso = now.toISOString();
     const currentDay = now.getDay();
     const currentTime = now.getHours() * 60 + now.getMinutes();
 
     // Campagnes actuellement actives
-    const activeCampaigns = db.prepare(
+    const activeCampaigns = await db.prepare(
       "SELECT * FROM campaigns WHERE status = 'active'"
     ).all();
 
     // Prochains événements
-    const upcomingEvents = db.prepare(`
+    const upcomingEvents = await db.prepare(`
       SELECT * FROM calendar_events
       WHERE is_active = 1 AND start_date > ?
       ORDER BY start_date ASC
@@ -374,7 +374,7 @@ class CalendarScheduler {
     `).all(nowIso);
 
     // Plannings actifs pour le jour
-    const todaySchedules = db.prepare(`
+    const todaySchedules = await db.prepare(`
       SELECT s.*, c.name as campaign_name
       FROM schedules s
       JOIN campaigns c ON s.campaign_id = c.id
@@ -406,12 +406,12 @@ class CalendarScheduler {
   /**
    * Vérifie si une campagne doit être active maintenant
    */
-  isCampaignScheduledNow(campaignId) {
+  async isCampaignScheduledNow(campaignId) {
     const now = new Date();
     const currentDay = now.getDay();
     const currentTime = now.getHours() * 60 + now.getMinutes();
 
-    const schedule = db.prepare(`
+    const schedule = await db.prepare(`
       SELECT COUNT(*) as cnt FROM schedules
       WHERE campaign_id = ?
         AND day_of_week = ?

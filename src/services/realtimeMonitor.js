@@ -39,7 +39,7 @@ class RealtimeMonitor {
       console.log(`🔗 WebSocket connecté: ${clientIp} (${this.wss.clients.size} actifs)`);
 
       // Envoie l'état initial
-      this._sendInitialState(ws);
+      this._sendInitialState(ws).catch(err => console.error('Erreur état initial WS:', err.message));
 
       ws.on('message', (message) => {
         this._handleClientMessage(ws, message);
@@ -66,20 +66,20 @@ class RealtimeMonitor {
     this.isRunning = true;
     // Diffusion toutes les 30 secondes
     this.broadcastInterval = setInterval(() => {
-      this._broadcastMetrics();
+      this._broadcastMetrics().catch(err => console.error('Erreur broadcast metrics:', err.message));
     }, 30000);
 
     // Première diffusion immédiate
-    this._broadcastMetrics();
+    this._broadcastMetrics().catch(err => console.error('Erreur broadcast metrics:', err.message));
   }
 
   /**
    * Envoie l'état initial à un nouveau client
    */
-  _sendInitialState(ws) {
-    const campaigns = db.prepare("SELECT * FROM campaigns WHERE status != 'removed'").all();
+  async _sendInitialState(ws) {
+    const campaigns = await db.prepare("SELECT * FROM campaigns WHERE status != 'removed'").all();
 
-    const fraudStats = db.prepare(
+    const fraudStats = await db.prepare(
       "SELECT COUNT(*) as cnt FROM blocked_ips WHERE is_active = 1 AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))"
     ).get();
 
@@ -110,8 +110,8 @@ class RealtimeMonitor {
   /**
    * Diffuse les métriques à tous les clients
    */
-  _broadcastMetrics() {
-    const campaigns = db.prepare("SELECT * FROM campaigns WHERE status != 'removed'").all();
+  async _broadcastMetrics() {
+    const campaigns = await db.prepare("SELECT * FROM campaigns WHERE status != 'removed'").all();
 
     if (campaigns.length === 0) return;
 

@@ -19,13 +19,13 @@ const ADS_KEYS = [
   'GOOGLE_ADS_LOGIN_CUSTOMER_ID',
 ];
 
-function readSetting(key) {
-  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
+async function readSetting(key) {
+  const row = await db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key);
   return row ? row.value : null;
 }
 
-function writeSetting(key, value) {
-  db.prepare(`
+async function writeSetting(key, value) {
+  await db.prepare(`
     INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
   `).run(key, value);
@@ -38,9 +38,11 @@ function mask(v) {
 }
 
 // GET /api/settings/api - retourne l'état (masqué) des credentials et le mode actif
-router.get('/api', (req, res) => {
+router.get('/api', async (req, res) => {
   const stored = {};
-  ADS_KEYS.forEach(k => stored[k] = readSetting(k));
+  for (const k of ADS_KEYS) {
+    stored[k] = await readSetting(k);
+  }
 
   const merged = {
     clientId: stored.GOOGLE_ADS_CLIENT_ID || config.googleAds.clientId,
@@ -80,16 +82,16 @@ router.post('/api', async (req, res) => {
     loginCustomerId: 'GOOGLE_ADS_LOGIN_CUSTOMER_ID',
   };
 
-  Object.entries(map).forEach(([field, key]) => {
+  for (const [field, key] of Object.entries(map)) {
     if (body[field] !== undefined && body[field] !== null && body[field] !== '') {
-      writeSetting(key, String(body[field]));
+      await writeSetting(key, String(body[field]));
       // applique aussi dans la config courante (process.env reste prioritaire en lecture initiale,
       // on met à jour l'objet config en mémoire pour les prochains appels)
       config.googleAds[field] = String(body[field]);
     }
-  });
+  }
 
-  db.prepare(
+  await db.prepare(
     "INSERT INTO audit_logs (event_type, severity, message) VALUES ('api_credentials_updated', 'info', ?)"
   ).run('Credentials Google Ads mis à jour via dashboard');
 
@@ -108,9 +110,9 @@ router.post('/api', async (req, res) => {
 
 // DELETE /api/settings/api - efface les credentials stockés
 router.delete('/api', async (req, res) => {
-  ADS_KEYS.forEach(k => {
-    db.prepare('DELETE FROM app_settings WHERE key = ?').run(k);
-  });
+  for (const k of ADS_KEYS) {
+    await db.prepare('DELETE FROM app_settings WHERE key = ?').run(k);
+  }
   // Réinitialise la config en mémoire à partir de l'env (peut être vide)
   config.googleAds.clientId = process.env.GOOGLE_ADS_CLIENT_ID;
   config.googleAds.clientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
@@ -155,7 +157,7 @@ router.post('/api/test', async (req, res) => {
 });
 
 // Charge les credentials depuis la DB au démarrage si présents
-function loadStoredCredentialsIntoConfig() {
+async function loadStoredCredentialsIntoConfig() {
   try {
     const map = {
       clientId: 'GOOGLE_ADS_CLIENT_ID',
@@ -165,12 +167,12 @@ function loadStoredCredentialsIntoConfig() {
       customerId: 'GOOGLE_ADS_CUSTOMER_ID',
       loginCustomerId: 'GOOGLE_ADS_LOGIN_CUSTOMER_ID',
     };
-    Object.entries(map).forEach(([field, key]) => {
-      const v = readSetting(key);
+    for (const [field, key] of Object.entries(map)) {
+      const v = await readSetting(key);
       if (v && !config.googleAds[field]) {
         config.googleAds[field] = v;
       }
-    });
+    }
   } catch (e) {
     // table peut ne pas exister à tout premier démarrage
   }

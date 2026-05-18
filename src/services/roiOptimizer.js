@@ -32,11 +32,11 @@ class RoiOptimizer {
     const intervalMs = config.roi.checkIntervalMinutes * 60 * 1000;
 
     // Premier lancement immédiat
-    this._runOptimizationCycle();
+    this._runOptimizationCycle().catch(err => console.error('Erreur cycle ROI:', err.message));
 
     // Puis lancement périodique
     this.optimizationInterval = setInterval(() => {
-      this._runOptimizationCycle();
+      this._runOptimizationCycle().catch(err => console.error('Erreur cycle ROI:', err.message));
     }, intervalMs);
 
     console.log(`📈 Optimiseur ROI démarré (intervalle: ${config.roi.checkIntervalMinutes} min)`);
@@ -52,7 +52,7 @@ class RoiOptimizer {
     const startTime = Date.now();
 
     // Récupère toutes les campagnes actives
-    const campaigns = db.prepare(
+    const campaigns = await db.prepare(
       "SELECT * FROM campaigns WHERE status != 'removed'"
     ).all();
 
@@ -84,10 +84,10 @@ class RoiOptimizer {
     if (!metrics) return { adjusted: false, reason: 'Pas de métriques disponibles' };
 
     // Met à jour les métriques dans la DB
-    this._updateCampaignMetrics(campaign.id, metrics);
+    await this._updateCampaignMetrics(campaign.id, metrics);
 
     // Récupère la campagne fraîchement mise à jour
-    const freshCampaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaign.id);
+    const freshCampaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaign.id);
 
     // Vérifie le seuil de coût minimum
     const totalSpend = freshCampaign.current_spend;
@@ -139,7 +139,7 @@ class RoiOptimizer {
     }
 
     // Enregistre un snapshot de métriques
-    this._saveMetricsSnapshot(campaign.id, metrics);
+    await this._saveMetricsSnapshot(campaign.id, metrics);
 
     return adjustment || { adjusted: false, cpa, roi, reason: 'Aucun ajustement nécessaire' };
   }
@@ -161,7 +161,7 @@ class RoiOptimizer {
     const result = await adsApi.updateCampaignBid(campaign.id, parseFloat(newMaxCpc.toFixed(2)));
 
     // Enregistre l'ajustement
-    this._logAdjustment(campaign.id, 'bid_change', oldMaxCpc, newMaxCpc, reason, {
+    await this._logAdjustment(campaign.id, 'bid_change', oldMaxCpc, newMaxCpc, reason, {
       cpa: campaign.current_spend / Math.max(campaign.conversions, 1),
       roi: campaign.roi,
       clicks: campaign.clicks,
@@ -170,7 +170,7 @@ class RoiOptimizer {
     console.log(`💰 Campagne ${campaign.name}: enchère ${oldMaxCpc.toFixed(2)} → ${newMaxCpc.toFixed(2)} € (${(adjustmentPct * 100).toFixed(0)}%) — ${reason}`);
 
     // Met à jour en local
-    db.prepare(
+    await db.prepare(
       "UPDATE campaigns SET max_cpc = ?, updated_at = datetime('now') WHERE id = ?"
     ).run(newMaxCpc, campaign.id);
 
@@ -190,14 +190,14 @@ class RoiOptimizer {
   async _pauseCampaign(campaign, reason) {
     await adsApi.setCampaignStatus(campaign.id, 'paused');
 
-    this._logAdjustment(campaign.id, 'pause', 'active', 'paused', reason, {
+    await this._logAdjustment(campaign.id, 'pause', 'active', 'paused', reason, {
       cpa: campaign.current_spend / Math.max(campaign.conversions, 1),
       roi: campaign.roi,
     });
 
     console.log(`⏸️  Campagne ${campaign.name} mise en pause — ${reason}`);
 
-    db.prepare(
+    await db.prepare(
       "UPDATE campaigns SET status = 'paused', updated_at = datetime('now') WHERE id = ?"
     ).run(campaign.id);
 
@@ -216,9 +216,9 @@ class RoiOptimizer {
   async resumeCampaign(campaignId, reason = 'Réactivation manuelle') {
     await adsApi.setCampaignStatus(campaignId, 'active');
 
-    this._logAdjustment(campaignId, 'resume', 'paused', 'active', reason);
+    await this._logAdjustment(campaignId, 'resume', 'paused', 'active', reason);
 
-    db.prepare(
+    await db.prepare(
       "UPDATE campaigns SET status = 'active', updated_at = datetime('now') WHERE id = ?"
     ).run(campaignId);
 
@@ -230,13 +230,13 @@ class RoiOptimizer {
   /**
    * Met à jour les métriques locales d'une campagne
    */
-  _updateCampaignMetrics(campaignId, metrics) {
+  async _updateCampaignMetrics(campaignId, metrics) {
     const cost = (metrics.costMicros || 0) / 1_000_000;
     const roi = cost > 0
       ? ((metrics.conversionValue - cost) / cost) * 100
       : 0;
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE campaigns SET
         impressions = impressions + ?,
         clicks = clicks + ?,
@@ -265,13 +265,13 @@ class RoiOptimizer {
   /**
    * Sauvegarde un snapshot de métriques
    */
-  _saveMetricsSnapshot(campaignId, metrics) {
+  async _saveMetricsSnapshot(campaignId, metrics) {
     const cost = (metrics.costMicros || 0) / 1_000_000;
     const roi = cost > 0
       ? ((metrics.conversionValue - cost) / cost) * 100
       : 0;
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO metrics_snapshot (campaign_id, impressions, clicks, spend, conversions, avg_cpc, ctr, roi)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
@@ -289,8 +289,8 @@ class RoiOptimizer {
   /**
    * Enregistre un ajustement dans l'historique
    */
-  _logAdjustment(campaignId, type, oldValue, newValue, reason, snapshot) {
-    db.prepare(`
+  async _logAdjustment(campaignId, type, oldValue, newValue, reason, snapshot) {
+    await db.prepare(`
       INSERT INTO roi_adjustments (campaign_id, adjustment_type, old_value, new_value, reason, performance_snapshot)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(campaignId, type, oldValue, newValue, reason, JSON.stringify(snapshot || {}));
@@ -299,8 +299,8 @@ class RoiOptimizer {
   /**
    * Analyse complète du ROI pour une campagne
    */
-  analyzeRoi(campaignId) {
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
+  async analyzeRoi(campaignId) {
+    const campaign = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId);
     if (!campaign) return null;
 
     const cpa = campaign.conversions > 0
@@ -308,11 +308,11 @@ class RoiOptimizer {
       : null;
 
     // Récupère l'historique des métriques (7 derniers jours)
-    const history = db.prepare(`
+    const history = await db.prepare(`
       SELECT * FROM metrics_snapshot
       WHERE campaign_id = ? AND timestamp > datetime('now', '-7 days')
       ORDER BY timestamp ASC
-    `).all();
+    `).all(campaignId);
 
     // Tendances
     const recentHistory = history.slice(-12); // 1h de données (si intervalle 5min)
@@ -391,8 +391,8 @@ class RoiOptimizer {
   /**
    * Retourne l'historique des ajustements
    */
-  getAdjustmentsHistory(limit = 50) {
-    return db.prepare(`
+  async getAdjustmentsHistory(limit = 50) {
+    return await db.prepare(`
       SELECT ra.*, c.name as campaign_name
       FROM roi_adjustments ra
       JOIN campaigns c ON ra.campaign_id = c.id

@@ -1,12 +1,6 @@
 {
   "builds": [
-    {
-      "src": "src/server.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": "node_modules/sql.js/dist/sql-wasm.wasm"
-      }
-    }
+    { "src": "src/server.js", "use": "@vercel/node" }
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "src/server.js" },
