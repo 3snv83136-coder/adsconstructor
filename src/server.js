@@ -1,13 +1,9 @@
 /**
  * AdWords Automator - Serveur principal
  *
- * Point d'entrée de l'application. Initialise :
- *   - La base de données
- *   - Les services (Google Ads, Fraude, ROI, Calendrier)
- *   - Le serveur HTTP + WebSocket (local uniquement)
- *   - Les routes API REST
- *
  * Compatible Vercel serverless : détection automatique via VERCEL env.
+ *   - Local       : démarre HTTP + WebSocket + setInterval (ROI, calendrier, fraude)
+ *   - Vercel      : init paresseuse à la 1re requête, WS et setInterval désactivés
  */
 const express = require('express');
 const http = require('http');
@@ -20,144 +16,152 @@ const path = require('path');
 const config = require('./config');
 const { initDatabase } = require('./database');
 
-// Services
 const adsApi = require('./services/adsApiClient');
 const fraudDetector = require('./services/fraudDetector');
 const roiOptimizer = require('./services/roiOptimizer');
 const calendarScheduler = require('./services/calendarScheduler');
 const realtimeMonitor = require('./services/realtimeMonitor');
 
-// Routes
 const campaignsRouter = require('./routes/campaigns');
 const fraudRouter = require('./routes/fraud');
 const roiRouter = require('./routes/roi');
 const calendarRouter = require('./routes/calendar');
 const settingsRouter = require('./routes/settings');
 
+const isVercel = !!process.env.VERCEL;
+
 // ============================================================
-//  Création de l'app Express
+//  Express app
 // ============================================================
 const app = express();
 const server = http.createServer(app);
 
-// --- Middleware ---
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
 app.use(cors());
 app.use(express.json());
-app.use(morgan('short'));
+if (!isVercel) app.use(morgan('short'));
 
-// --- Routes API ---
+// ============================================================
+//  Initialisation paresseuse — gate avant chaque requête
+//  (sur Vercel, la 1re requête peut arriver avant que la DB ne soit prête)
+// ============================================================
+let initPromise = null;
+
+function ensureInitialized() {
+  if (!initPromise) initPromise = initialize();
+  return initPromise;
+}
+
+app.use(async (req, res, next) => {
+  try {
+    await ensureInitialized();
+    next();
+  } catch (err) {
+    console.error('Init failed:', err);
+    res.status(503).json({ error: 'Service en cours d\'initialisation', detail: err.message });
+  }
+});
+
+// ============================================================
+//  Routes API
+// ============================================================
 app.use('/api/campaigns', campaignsRouter);
 app.use('/api/fraud', fraudRouter);
 app.use('/api/roi', roiRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/settings', settingsRouter);
 
-// --- Route de santé ---
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     uptime: process.uptime(),
+    env: isVercel ? 'vercel' : 'local',
     timestamp: new Date().toISOString(),
     services: {
-      adsApi: adsApi.initialized,
-      fraudDetector: fraudDetector.isRunning || true,
-      roiOptimizer: roiOptimizer.isRunning,
-      calendarScheduler: calendarScheduler.isRunning,
-      realtimeMonitor: realtimeMonitor.isRunning,
+      adsApi: !!adsApi.initialized,
+      fraudDetector: !!fraudDetector.isRunning,
+      roiOptimizer: !!roiOptimizer.isRunning,
+      calendarScheduler: !!calendarScheduler.isRunning,
+      realtimeMonitor: !!realtimeMonitor.isRunning,
     },
   });
 });
 
-// --- Dashboard statique ---
+// ============================================================
+//  Dashboard statique
+// ============================================================
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-// --- Gestion des erreurs ---
 app.use((err, req, res, next) => {
   console.error('Erreur serveur:', err);
-  res.status(500).json({ error: 'Erreur interne du serveur' });
+  res.status(500).json({ error: 'Erreur interne du serveur', detail: err.message });
 });
 
 // ============================================================
-//  Initialisation asynchrone (top-level await supporté par Vercel / Node 14+)
+//  Initialisation
 // ============================================================
 async function initialize() {
-  const isVercel = !!process.env.VERCEL;
-
   if (!isVercel) {
     console.log('═══════════════════════════════════════════════');
     console.log('  AdWords Automator v1.0.0');
-    console.log('  Gestion automatisée de campagnes Google Ads');
-    console.log('═══════════════════════════════════════════════');
-    console.log('');
+    console.log('═══════════════════════════════════════════════\n');
   }
 
-  // 1. Base de données
   await initDatabase();
 
-  // 1bis. Charge les credentials API stockés en DB (config persistée via UI)
   if (settingsRouter.loadStoredCredentialsIntoConfig) {
     settingsRouter.loadStoredCredentialsIntoConfig();
   }
 
-  // 2. Service Google Ads
   await adsApi.initialize();
 
-  // 3. WebSocket temps réel (désactivé sur Vercel — pas de WS persistant)
+  // setInterval et WebSocket n'ont aucun sens en serverless → local uniquement
   if (!isVercel) {
     realtimeMonitor.initialize(server);
     realtimeMonitor.startBroadcast();
-  }
-
-  // 4. Bloqueur de clics abusifs
-  fraudDetector.start();
-
-  // 5. Optimiseur ROI
-  roiOptimizer.start();
-
-  // 6. Calendrier de diffusion
-  calendarScheduler.start();
-
-  // 7. Démarrage du serveur HTTP (local uniquement)
-  if (!isVercel) {
-    const port = config.server.port;
-    server.listen(port, () => {
-      console.log('');
-      console.log('═══════════════════════════════════════════════');
-      console.log(`  🚀 Serveur démarré sur http://localhost:${port}`);
-      console.log(`  📊 Dashboard: http://localhost:${port}`);
-      console.log(`  📡 API:        http://localhost:${port}/api`);
-      console.log(`  🔌 WebSocket:  ws://localhost:${port}`);
-      console.log('═══════════════════════════════════════════════');
-    });
+    fraudDetector.start();
+    roiOptimizer.start();
+    calendarScheduler.start();
+  } else {
+    // En serverless, on charge juste les IPs bloquées en mémoire (cache rapide)
+    try { fraudDetector.start(); } catch (e) { console.warn('fraudDetector.start failed:', e.message); }
   }
 }
 
-// Initialisation
-const initPromise = initialize().catch(err => {
-  console.error('Erreur fatale au démarrage:', err);
-  if (!process.env.VERCEL) process.exit(1);
-});
-
-// Gestion de l'arrêt propre (local uniquement)
-if (!process.env.VERCEL) {
-  function shutdown() {
-    console.log('\n🛑 Arrêt du serveur...');
-    fraudDetector.stop();
-    roiOptimizer.stop();
-    calendarScheduler.stop();
-    realtimeMonitor.stop();
-    server.close(() => {
-      console.log('✅ Serveur arrêté');
-      process.exit(0);
+// ============================================================
+//  Démarrage HTTP local uniquement
+// ============================================================
+if (!isVercel) {
+  ensureInitialized()
+    .then(() => {
+      const port = config.server.port;
+      server.listen(port, () => {
+        console.log('═══════════════════════════════════════════════');
+        console.log(`  🚀 http://localhost:${port}`);
+        console.log(`  📊 Dashboard: http://localhost:${port}`);
+        console.log(`  📡 API:        http://localhost:${port}/api`);
+        console.log(`  🔌 WebSocket:  ws://localhost:${port}`);
+        console.log('═══════════════════════════════════════════════');
+      });
+    })
+    .catch(err => {
+      console.error('Erreur fatale au démarrage:', err);
+      process.exit(1);
     });
-  }
 
+  function shutdown() {
+    console.log('\n🛑 Arrêt...');
+    try { fraudDetector.stop(); } catch {}
+    try { roiOptimizer.stop(); } catch {}
+    try { calendarScheduler.stop(); } catch {}
+    try { realtimeMonitor.stop(); } catch {}
+    server.close(() => process.exit(0));
+  }
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 }
