@@ -23,7 +23,18 @@ const dbPath = path.resolve(config.database.path);
  */
 async function initDatabase() {
   const initSqlJs = require('sql.js');
-  SQL = await initSqlJs();
+
+  // Sur Vercel (et tout environnement où le wasm n'est pas trouvé via le chemin
+  // par défaut), on pointe explicitement sur le binaire situé dans node_modules
+  SQL = await initSqlJs({
+    locateFile: (file) => {
+      try {
+        return require.resolve(`sql.js/dist/${file}`);
+      } catch (e) {
+        return path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', file);
+      }
+    },
+  });
 
   // Charge une base existante ou en crée une nouvelle
   if (fs.existsSync(dbPath)) {
