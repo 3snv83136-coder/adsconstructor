@@ -60,14 +60,14 @@ class CalendarScheduler {
     ).all();
 
     for (const campaign of campaigns) {
-      this._checkCampaignSchedule(campaign, currentDay, currentTime, now);
+      this._checkCampaignSchedule(campaign, currentDay, currentHour, currentMinute, now);
     }
   }
 
   /**
    * Vérifie le planning d'une campagne pour le tick actuel
    */
-  _checkCampaignSchedule(campaign, currentDay, currentTime, now) {
+  _checkCampaignSchedule(campaign, currentDay, currentHour, currentMinute, now) {
     // 1. Vérifie d'abord les événements exceptionnels (prioritaires)
     const activeEvent = this._getActiveCalendarEvent(campaign.id, now);
     if (activeEvent) {

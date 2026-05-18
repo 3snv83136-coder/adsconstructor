@@ -82,16 +82,25 @@ function prepare(sql) {
 
   const stmt = db.prepare(sql);
 
+  // sql.js refuse undefined → conversion en null pour compat better-sqlite3
+  const safe = (params) => params.map(p => (p === undefined ? null : p));
+
   return {
     run(...params) {
-      stmt.bind(params);
+      stmt.bind(safe(params));
       stmt.step();
       stmt.free();
-      return { changes: db.getRowsModified() };
+      const changes = db.getRowsModified();
+      let lastInsertRowid;
+      try {
+        const r = db.exec('SELECT last_insert_rowid() AS id');
+        lastInsertRowid = r[0]?.values?.[0]?.[0];
+      } catch (e) { /* ignore */ }
+      return { changes, lastInsertRowid };
     },
 
     get(...params) {
-      stmt.bind(params);
+      stmt.bind(safe(params));
       if (stmt.step()) {
         const row = stmt.getAsObject();
         stmt.free();
@@ -102,7 +111,7 @@ function prepare(sql) {
     },
 
     all(...params) {
-      stmt.bind(params);
+      stmt.bind(safe(params));
       const rows = [];
       while (stmt.step()) {
         rows.push(stmt.getAsObject());
@@ -261,6 +270,12 @@ function createTables() {
       message TEXT NOT NULL,
       details TEXT,
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at TEXT DEFAULT (datetime('now'))
     );
   `);
 }
